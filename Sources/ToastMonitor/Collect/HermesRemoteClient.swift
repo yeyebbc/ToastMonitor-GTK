@@ -1,6 +1,9 @@
 import Foundation
-import Combine
-import CryptoKit
+import FoundationNetworking
+import OpenCombine
+import OpenCombineFoundation
+import OpenCombineDispatch
+import Crypto
 
 /// Remote usage collector: pulls the usage feed exported by the VPS
 /// (cron exporter over a user-configured HTTPS or private-network feed)

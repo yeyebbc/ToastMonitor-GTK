@@ -1,5 +1,5 @@
 import Foundation
-import Darwin
+import Glibc
 
 /// Incremental JSONL utilities: tracks byte offsets so we only parse appended data.
 enum FileScanner {
@@ -30,15 +30,15 @@ enum FileScanner {
     static func fileStat(_ path: String) -> Stat? {
         var st = stat()
         guard stat(path, &st) == 0 else { return nil }
-        let mtime = Int64(st.st_mtimespec.tv_sec) * 1_000_000_000 + Int64(st.st_mtimespec.tv_nsec)
-        return Stat(size: st.st_size, mtime: mtime, identity: Int64(st.st_ino))
+        let mtime = Int64(st.st_mtim.tv_sec) * 1_000_000_000 + Int64(st.st_mtim.tv_nsec)
+        return Stat(size: Int64(st.st_size), mtime: mtime, identity: Int64(st.st_ino))
     }
 
     /// Directory mtime (changes when entries are added/removed).
     static func dirMT(_ path: String) -> Int64? {
         var st = stat()
         guard stat(path, &st) == 0 else { return nil }
-        return Int64(st.st_mtimespec.tv_sec) * 1_000_000_000 + Int64(st.st_mtimespec.tv_nsec)
+        return Int64(st.st_mtim.tv_sec) * 1_000_000_000 + Int64(st.st_mtim.tv_nsec)
     }
 
     /// Lists JSONL files while reusing a traversal until any visited

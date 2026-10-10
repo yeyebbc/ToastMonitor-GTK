@@ -1,5 +1,5 @@
 import Foundation
-import Darwin
+import Glibc
 
 /// Delegates Claude Code's OAuth token refresh to the real `claude` CLI
 /// instead of ToastMonitor implementing an OAuth refresh flow of its own.

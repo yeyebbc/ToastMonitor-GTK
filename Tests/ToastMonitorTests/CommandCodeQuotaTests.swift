@@ -1,4 +1,5 @@
 import XCTest
+import FoundationNetworking
 @testable import ToastMonitor
 
 final class CommandCodeQuotaTests: XCTestCase {

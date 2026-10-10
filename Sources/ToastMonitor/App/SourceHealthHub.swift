@@ -1,5 +1,7 @@
 import Foundation
-import Combine
+import OpenCombine
+import OpenCombineFoundation
+import OpenCombineDispatch
 
 /// Per-source collection health, observable by the UI (spec §3.2 数据来源).
 struct SourceHealth: Identifiable, Equatable {

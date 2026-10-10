@@ -1,123 +1,27 @@
-name: CI
-
-# Quoted so YAML 1.1 parsers do not fold `on` into boolean true.
+name: Linux CI
 "on":
   push:
     branches: [main]
-    tags: ["v*"]
   pull_request:
     branches: [main]
   workflow_dispatch:
-
-# NOTE: the source uses macOS 27 SDK APIs (NSSegmentedControl.role etc.),
-# so this workflow needs an Xcode 27 toolchain. macOS 27 has shipped, but
-# GitHub's hosted runners label it `xcode-27` (public preview, arm64) — not
-# `macos-27`. If a plain `macos-27` label appears later, this can switch back.
-# Note: `swift test` no longer needs the release signing key (UpdateChecker
-# tests use a self-contained key pair), so a clean runner can run the full
-# suite as-is.
-#
-# Actions are pinned to major tags that ship on the Node.js 24 runtime
-# (checkout >= v5, cache >= v5, upload-artifact >= v6); the Node.js 20
-# releases are deprecated and get force-upgraded by the runner.
 permissions:
   contents: read
-
-env:
-  SWIFT_DETERMINISTIC_HASHING: "1"
-
 jobs:
   build-and-test:
-    runs-on: xcode-27
+    runs-on: ubuntu-24.04
+    container: swift:6.0.3-noble
     steps:
-      - name: Checkout
-        uses: actions/checkout@v7
-
-      # SwiftPM builds are expensive (~minutes); cache the build dir keyed on
-      # the manifest and source hashes so the repeated gate steps reuse the
-      # compiled product.
-      - name: Cache SwiftPM build
-        uses: actions/cache@v6
-        with:
-          path: .build
-          key: swift-${{ runner.os }}-${{ hashFiles('Package.swift') }}-${{ hashFiles('Sources/**/*.swift', 'Tests/**/*.swift') }}
-          restore-keys: |
-            swift-${{ runner.os }}-${{ hashFiles('Package.swift') }}-
-
-      - name: Swift build (debug)
-        run: swift build
-
-      - name: Swift test
-        run: swift test
-
-      # Re-open a pre-versioned fixture through the real migration path and
-      # replay canonical rows. These are deterministic, data-loss-sensitive
-      # gates rather than timing assumptions about a hosted runner.
-      - name: Migration replay gate
+      - uses: actions/checkout@v4
+      - name: Install GNOME dependencies
         run: |
-          swift test --filter DatabaseTests.testSubscriptionIDZeroMigration
-          swift test --filter DatabaseTests.testCanonicalEventSupersedesDerivedMigrationRow
-
-      - name: Duplicate import gate
-        run: swift test --filter ClaudeCodeParserTests.testRepeatedTranscriptRowsShareMessageIdentity
-
-      # Release compilation catches optimizer-only regressions in the scanner
-      # and parser hot paths without asserting a wall-clock budget on CI.
-      - name: Release performance smoke gate
-        run: swift test -c release --filter FileScannerTests
-
-      - name: Strict concurrency gate
-        run: swift build -Xswiftc -strict-concurrency=complete
-
-      # Four dashboard pages, the popover, and two settings panes in light/dark.
-      # Average-hash comparison tolerates minor antialiasing changes while
-      # still catching blank renders and structural layout regressions.
-      - name: Visual regression gate
-        env:
-          TM_VISUAL_ARTIFACT_DIR: ${{ runner.temp }}/visual-regression-failure
-        run: xcrun swift scripts/visual-regression.swift compare
-
-      - name: Upload failing scene captures and hashes
-        if: failure()
-        uses: actions/upload-artifact@v7
-        with:
-          name: visual-regression-failure-${{ github.run_id }}-${{ github.run_attempt }}
-          path: ${{ runner.temp }}/visual-regression-failure/*
-          if-no-files-found: ignore
-
-  release-bundle:
-    if: startsWith(github.ref, 'refs/tags/v')
-    needs: build-and-test
-    runs-on: xcode-27
-    # Secrets cannot be referenced inside `if:` expressions (workflow fails
-    # to parse), so surface the identity into env and gate the steps below
-    # on env.TM_SIGNING_IDENTITY instead.
-    env:
-      TM_SIGNING_IDENTITY: ${{ secrets.TM_SIGNING_IDENTITY }}
-    steps:
-      - name: Checkout tag
-        uses: actions/checkout@v7
-        with:
-          fetch-depth: 0
-
-      - name: Validate semantic release tag
-        run: |
-          tag="${GITHUB_REF_NAME#v}"
-          [[ "$tag" =~ ^[0-9]+(\.[0-9]+){1,2}$ ]] || {
-            echo "release tags must be vMAJOR.MINOR or vMAJOR.MINOR.PATCH" >&2
-            exit 1
-          }
-
-      - name: Assemble signed app
-        if: ${{ env.TM_SIGNING_IDENTITY != '' }}
-        env:
-          TM_VERSION: ${{ github.ref_name }}
-          TM_BUILD_NUMBER: ${{ github.run_number }}
-        run: ./scripts/build-app.sh
-
-      - name: Upload app bundle
-        if: ${{ env.TM_SIGNING_IDENTITY != '' }}
-        uses: actions/upload-artifact@v7
-        with:
-          name: ToastMonitor-${{ github.ref_name }}
-          path: dist/ToastMonitor.app
+          apt-get update
+          apt-get install -y libgtk-4-dev libadwaita-1-dev libsqlite3-dev libsecret-1-dev libssl-dev libcurl4-openssl-dev zstd xvfb dbus-x11
+      - name: Build
+        run: swift build -j 4
+      - name: Test
+        run: swift test -j 4
+      - name: Tray integration smoke
+        run: ./scripts/smoke-linux.sh
+      - name: Release compilation
+        run: swift build -c release -j 4

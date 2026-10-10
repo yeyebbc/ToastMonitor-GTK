@@ -1,6 +1,6 @@
 import Foundation
 import SQLite3
-import Darwin
+import Glibc
 
 /// Thread-safe SQLite store. WAL mode, single writer, batched transactions.
 final class Database: @unchecked Sendable {
@@ -50,8 +50,7 @@ final class Database: @unchecked Sendable {
             return
         }
         let fm = FileManager.default
-        let base = fm.urls(for: .applicationSupportDirectory, in: .userDomainMask).first!
-        let dir = base.appendingPathComponent("ToastMonitor", isDirectory: true)
+        let dir = LinuxPaths.dataDirectory()
         try? fm.createDirectory(at: dir, withIntermediateDirectories: true)
         openLocked(dir.appendingPathComponent("toastmonitor.db").path)
     }
@@ -2118,9 +2117,9 @@ final class Database: @unchecked Sendable {
         guard let db else { return false }
         let fm = FileManager.default
         if !overwrite {
-            let descriptor = Darwin.open(destination, O_RDWR | O_CREAT | O_EXCL, 0o600)
+            let descriptor = Glibc.open(destination, O_RDWR | O_CREAT | O_EXCL, 0o600)
             guard descriptor >= 0 else { return false }
-            Darwin.close(descriptor)
+            Glibc.close(descriptor)
         }
         var completed = false
         defer {
@@ -2177,7 +2176,7 @@ final class Database: @unchecked Sendable {
         guard sqlite3_step(statement) == SQLITE_DONE else { return false }
         do { try fm.setAttributes([.posixPermissions: 0o600], ofItemAtPath: compact) }
         catch { return false }
-        return Darwin.rename(compact, destination) == 0
+        return Glibc.rename(compact, destination) == 0
     }
 
     func restore(from source: String, beforeReplace: (() -> String?)? = nil) -> Bool {

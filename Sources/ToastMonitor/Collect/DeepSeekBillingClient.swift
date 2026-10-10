@@ -1,5 +1,8 @@
 import Foundation
-import Combine
+import FoundationNetworking
+import OpenCombine
+import OpenCombineFoundation
+import OpenCombineDispatch
 
 @MainActor
 final class DeepSeekBillingClient: ObservableObject {

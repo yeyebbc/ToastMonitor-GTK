@@ -1,4 +1,6 @@
 import Foundation
+import OpenCombine
+import FoundationNetworking
 
 /// OpenRouter quota panel.
 ///

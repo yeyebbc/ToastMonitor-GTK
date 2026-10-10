@@ -47,6 +47,9 @@ final class RestoreSafetyTests: XCTestCase {
         ].enumerated() {
             let path = directory + "/invalid-\(index).db"
             XCTAssertTrue(database.backup(to: path))
+            if index == 0 {
+                execute("DROP TRIGGER IF EXISTS turn_rollup_insert; DROP TRIGGER IF EXISTS turn_rollup_delete; DROP TRIGGER IF EXISTS turn_rollup_update;", at: path)
+            }
             execute(sql, at: path)
             XCTAssertFalse(database.restore(from: path))
             XCTAssertEqual(database.turnCount(), 1)

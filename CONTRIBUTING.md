@@ -1,56 +1,9 @@
-# Contributing to ToastMonitor
+# Contributing
 
-Thanks for considering a contribution. This project is a native macOS menu-bar app with **zero third-party dependencies**, and every change should keep it that way.
+ToastMonitor targets Linux/GNOME using adwaita-swift. Follow the dependencies and Swift setup in [README.md](README.md).
 
-## Development setup
+Run `swift build`, `swift test` and `./scripts/smoke-linux.sh` before submitting a change. Parser and database changes must preserve event identity, incremental scan cursors, transactions, protected backups and provider cost semantics. Keep credentials in Secret Service and never log secrets.
 
-- macOS 13+ to run; building needs Xcode 27 (macOS 27 SDK) with the SwiftPM 5.10+ toolchain — the dashboard toolbar uses macOS 27 AppKit symbols behind `#available`
-- `zstd` CLI is optional (Homebrew: `brew install zstd`) — without it the DSH collector falls back to cache mode and the zstd tests are skipped
+UI changes should use libadwaita controls and respect GNOME light/dark settings. Verify at a narrow window width and with no tray extension. Closing the window must preserve background collection; Quit must stop the application.
 
-```bash
-swift build                  # debug build
-swift test                   # full test suite
-swift test --filter DSHParserTests   # a single suite
-```
-
-Builds in this repo are normally run with `swift build --disable-sandbox` on the host; CI uses a plain `swift build`.
-
-## Visual regression
-
-CI runs `xcrun swift scripts/visual-regression.swift compare` on Xcode 27. Each scenario gets a fresh temporary `HOME` and `CFFIXED_USER_HOME` as well as its own database; `TZ` and `LANG` are fixed. Popover renders use `TM_VISUAL_REFERENCE_UNIX_TIME=1790769600` (2026-09-30 12:00 UTC) to stabilize date-dependent labels and the activity grid.
-
-On a popover distance mismatch, CI logs the expected and actual hashes and uploads that scene's PNG for review. Blank or unreadable renders can fail before comparison and therefore may have no PNG artifact. Inspect the capture against the intended UI before intentionally updating its entry in `Tests/VisualBaselines/hashes.json`; never regenerate baselines blindly or relax the threshold.
-
-## Constraints
-
-- **No third-party dependencies.** Everything ships with the system frameworks (AppKit, SwiftUI, sqlite3, Security). If you're adding a library, reconsider — almost everything here is a small amount of system-API code.
-- **Local-only privacy default.** User data stays on the Mac unless the user explicitly enables a remote feed or quota service. Never add analytics, telemetry or implicit network calls.
-- **Credentials never in plaintext.** API keys and cookies belong in the macOS Keychain (see `KeychainStore`). Never log, print or store secrets in SQLite/plists.
-- **Background Keychain reads never prompt.** `kSecUseAuthenticationUI` and `LAContext.interactionNotAllowed` are honoured only by the data-protection keychain; login-keychain items ignore both and open a SecurityAgent password sheet on an ACL miss. Route every unattended read through `KeychainStore.withoutUserInteraction`, and keep the interactive path behind an explicit `allowPrompt: true` the user asked for.
-
-## What to touch
-
-- Parsers live in `Sources/ToastMonitor/Collect/` (one per tool: `ClaudeCodeParser`, `CodexParser`, `DSHParser`, …). Each uses the shared `scan_state` incremental machinery — a new source should follow the same cursor + idempotent-insert pattern.
-- Row semantics are documented in [`docs/data-semantics.md`](docs/data-semantics.md) and [`docs/token-collection.md`](docs/token-collection.md) — keep them in sync when you change accounting.
-- Every parser ships with fixtures + tests in `Tests/ToastMonitorTests/` (see `Fixtures/`).
-
-## Pull request workflow
-
-1. Branch from `main`; keep the change focused.
-2. Add or update tests for behavior changes — the CI gates (migration replay, duplicate-import) are mandatory.
-3. Run `swift build` and `swift test` locally; make sure the whole suite passes.
-4. Open a PR with a short description: what changed, why, and any data-semantics implications.
-
-## Commit messages
-
-Use concise imperative subject lines, e.g.:
-
-```
-Add DeepSeek Harness token source with log/cache dual mode
-```
-
-Prefer a few focused commits over one giant one.
-
-## Reporting issues
-
-Use the issue templates. Include: app version (`--version`), macOS version, reproduction steps and sanitized logs. **Never** attach tokens, cookies, API keys, project paths or raw session content.
+Dependency versions are pinned in Package.swift and Package.resolved. Do not switch adwaita-swift to main without updating the required Swift and libadwaita versions.

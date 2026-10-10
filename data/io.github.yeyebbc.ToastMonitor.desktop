@@ -1,0 +1,10 @@
+[Desktop Entry]
+Type=Application
+Name=ToastMonitor
+Comment=Monitor AI token usage and account quotas
+Exec=ToastMonitor
+Icon=io.github.yeyebbc.ToastMonitor
+Terminal=false
+Categories=System;Monitor;
+Keywords=AI;Tokens;Claude;Codex;Usage;
+StartupNotify=true

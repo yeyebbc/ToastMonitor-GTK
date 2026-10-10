@@ -1,4 +1,5 @@
 import XCTest
+import FoundationNetworking
 import SQLite3
 @testable import ToastMonitor
 
@@ -133,7 +134,10 @@ final class CodexParserJSONTests: XCTestCase {
         let est = Pricing.estimate(model: contextModel, input: 3500, output: 421,
                                    cacheRead: 1200, cacheWrite: 80)
         XCTAssertNotNil(est, "gpt-5.6-sol must resolve to the gpt-5.6 rate")
-        XCTAssertEqual(est!, 3500.0 / 1e6 * 1.25 + 421.0 / 1e6 * 10 + 1200.0 / 1e6 * 0.125 + 80.0 / 1e6 * 1.875,
+        let expectedInput: Double = 3500.0 / 1e6 * 1.25
+        let expectedOutput: Double = 421.0 / 1e6 * 10
+        let expectedCache: Double = 1200.0 / 1e6 * 0.125 + 80.0 / 1e6 * 1.875
+        XCTAssertEqual(est!, expectedInput + expectedOutput + expectedCache,
                        accuracy: 0.0001)
     }
 }

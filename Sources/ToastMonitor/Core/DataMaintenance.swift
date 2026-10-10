@@ -9,8 +9,7 @@ struct DataRepairReceipt: Equatable, Sendable {
 
 enum DataMaintenance {
     static var directory: URL {
-        let base = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first!
-        return base.appendingPathComponent("ToastMonitor/Backups", isDirectory: true)
+        LinuxPaths.dataDirectory().appendingPathComponent("backups", isDirectory: true)
     }
 
     static func preview() -> Database.LocalRebuildPreview {

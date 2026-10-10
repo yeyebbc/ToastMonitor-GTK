@@ -1,0 +1,8 @@
+[Desktop Entry]
+Type=Application
+Name=ToastMonitor
+Comment=Monitor AI usage in the tray
+Exec=ToastMonitor --background
+Icon=io.github.yeyebbc.ToastMonitor
+Terminal=false
+X-GNOME-Autostart-enabled=true

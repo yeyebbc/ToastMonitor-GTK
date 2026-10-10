@@ -1,5 +1,8 @@
 import Foundation
-import Combine
+import FoundationNetworking
+import OpenCombine
+import OpenCombineFoundation
+import OpenCombineDispatch
 
 /// Claude subscription quota via the OAuth usage endpoint that Claude Code's
 /// own status line is fed from: reads the OAuth access token Claude Code
@@ -319,32 +322,9 @@ final class ClaudeQuotaClient: ObservableObject {
     /// An unauthorized read now fails instead, and `securityToolCredentials`
     /// recovers from it without involving the user.
     private nonisolated static func keychainCredentials() -> Data? {
-        var query: [String: Any] = [
-            kSecClass as String: kSecClassGenericPassword,
-            kSecAttrService as String: claudeKeychainService,
-            kSecReturnData as String: true,
-            kSecMatchLimit as String: kSecMatchLimitOne,
-        ]
-        query[kSecUseAuthenticationUI as String] = kSecUseAuthenticationUIFail
-        let (status, item) = KeychainStore.withoutUserInteraction { () -> (OSStatus, CFTypeRef?) in
-            var out: CFTypeRef?
-            let status = SecItemCopyMatching(query as CFDictionary, &out)
-            return (status, out)
-        }
-        if status == errSecSuccess, let data = item as? Data, data.count <= maxCredentialBytes {
-            recordDenial(false)
-            return data
-        }
-        guard KeychainStore.authorizationFailures.contains(status) else {
-            recordDenial(false)
-            return nil
-        }
-        guard let borrowed = securityToolCredentials() else {
-            recordDenial(true)
-            return nil
-        }
+        // Linux Claude Code stores OAuth in ~/.claude/.credentials.json.
         recordDenial(false)
-        return borrowed
+        return nil
     }
 
     /// Fall back to `/usr/bin/security`, which is permanently trusted for

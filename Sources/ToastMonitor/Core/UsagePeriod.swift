@@ -1,4 +1,5 @@
 import Foundation
+import OpenCombine
 
 enum UsagePeriodMode: String, CaseIterable, Identifiable {
     case recent

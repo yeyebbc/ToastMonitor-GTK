@@ -1,4 +1,5 @@
 import Foundation
+import FoundationNetworking
 
 /// URLSession delegate that cancels every redirect and bounds response bodies.
 /// Credential-bearing clients use it so a Bearer token / auth cookie can never

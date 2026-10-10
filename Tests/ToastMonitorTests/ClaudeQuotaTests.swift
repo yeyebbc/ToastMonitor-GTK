@@ -180,6 +180,7 @@ final class ClaudeQuotaTests: XCTestCase {
     /// so the thing that matters is that it always hands the switch back —
     /// otherwise the `--provision-*` CLI paths, which are supposed to be able
     /// to prompt, would go silently deaf after the first background refresh.
+    #if os(macOS)
     func testWithoutUserInteractionRestoresTheProcessWideSwitch() {
         var before: DarwinBoolean = false
         XCTAssertEqual(SecKeychainGetUserInteractionAllowed(&before), errSecSuccess)
@@ -207,6 +208,8 @@ final class ClaudeQuotaTests: XCTestCase {
         XCTAssertEqual(SecKeychainGetUserInteractionAllowed(&after), errSecSuccess)
         XCTAssertEqual(after.boolValue, before.boolValue)
     }
+
+    #endif
 
     // MARK: - runCapturing (the /usr/bin/security fallback's plumbing)
 

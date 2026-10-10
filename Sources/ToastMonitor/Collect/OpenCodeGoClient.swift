@@ -1,4 +1,6 @@
 import Foundation
+import OpenCombine
+import FoundationNetworking
 
 /// OpenCode Go subscription quota (套餐).
 /// There is no public quota API — the workspace dashboard page

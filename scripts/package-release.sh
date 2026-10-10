@@ -1,70 +1,11 @@
-#!/bin/bash
-# Build release artifacts for GitHub Releases.
-#
-# Default: both arm64 and universal apps. The architecture-aware appcast
-# selects arm64 for Apple Silicon and universal for Intel. build-app.sh
-# builds each universal slice separately and merges them with lipo, so both
-# artifacts record the current SDK and get the native macOS 26/27 look.
-#
-# Set TM_ARM64_ONLY=1 for a local/internal arm64-only package. The old
-# TM_ALSO_UNIVERSAL=1 flag remains harmless for callers that used it before.
-#
-# Usage: ./scripts/package-release.sh
-# Produces dist/release/ToastMonitor-<version>-arm64.zip
-#   (+ dist/release/ToastMonitor-<version>-universal.zip when TM_ALSO_UNIVERSAL=1)
+#!/usr/bin/env bash
 set -euo pipefail
-ROOT="$(cd "$(dirname "$0")/.." && pwd)"
-cd "$ROOT"
-
-# Only an exact tag hit is a release version (see build-app.sh); untagged
-# commits package as 1.0 rather than impersonating the last release.
-TAG_VERSION="$(git describe --tags --match 'v[0-9]*' --exact-match 2>/dev/null || true)"
-RAW_VERSION="${TM_VERSION:-${TAG_VERSION#v}}"
-VERSION="${RAW_VERSION#v}"
-if [[ -z "$VERSION" ]]; then
-    VERSION="1.0"
-    # Zips built here are what sign-update-manifest.sh points released users
-    # at, so an untagged package is almost never what was intended.
-    NEAREST_TAG="$(git describe --tags --match 'v[0-9]*' --abbrev=0 2>/dev/null || true)"
-    if [[ -n "$NEAREST_TAG" ]]; then
-        echo "warning: HEAD is not tagged — packaging as $VERSION, not ${NEAREST_TAG#v}." >&2
-        echo "         Signing a manifest from these zips would hand ${NEAREST_TAG}'s users a 1.0 build." >&2
-        echo "         Build the tag instead: git checkout $NEAREST_TAG && ./scripts/package-release.sh" >&2
-    fi
-fi
-if [[ ! "$VERSION" =~ ^[0-9]+(\.[0-9]+){1,2}$ ]]; then
-    echo "error: invalid release version: $VERSION" >&2
-    exit 1
-fi
-RELEASE_DIR="${TM_RELEASE_PATH:-$ROOT/dist/release}"
-APP="${TM_APP_PATH:-$ROOT/dist/ToastMonitor.app}"
-echo "== packaging ToastMonitor v$VERSION =="
-mkdir -p "$RELEASE_DIR"
-
-ARCHS="arm64 universal"
-if [[ "${TM_ARM64_ONLY:-0}" == "1" ]]; then
-    ARCHS="arm64"
-fi
-for arch in $ARCHS; do
-    echo ""
-    echo "== building $arch =="
-    case "$arch" in
-        arm64)     TM_ARCHS="arm64" ;;
-        universal) TM_ARCHS="arm64 x86_64" ;;
-    esac
-    TM_VERSION="$VERSION" TM_APP_PATH="$APP" TM_ARCHS="$TM_ARCHS" TM_SKIP_INSTALL=1 ./scripts/build-app.sh
-    file "$APP/Contents/MacOS/ToastMonitor"
-    ZIP="$RELEASE_DIR/ToastMonitor-${VERSION}-${arch}.zip"
-    ditto -c -k --sequesterRsrc --keepParent "$APP" "$ZIP"
-    echo "== $ZIP ($(du -sh "$ZIP" | cut -f1)) =="
-done
-
-echo ""
-echo "== artifacts =="
-ls -la "$RELEASE_DIR/"
-echo ""
-echo "上传到 GitHub Release："
-echo "  gh release create v$VERSION dist/release/*.zip --title 'ToastMonitor v$VERSION' --generate-notes"
-echo ""
-echo "生成架构感知签名更新清单："
-echo "  ./scripts/sign-update-manifest.sh $VERSION dist/release/ToastMonitor-${VERSION}-arm64.zip dist/release/ToastMonitor-${VERSION}-universal.zip"
+cd "$(dirname "$0")/.."
+./scripts/build-app.sh
+mkdir -p dist/release
+version="${TM_VERSION:-1.0.0}"
+[[ "$version" =~ ^[0-9]+(\.[0-9]+){1,2}$ ]] || { echo "TM_VERSION must be numeric" >&2; exit 1; }
+archive="dist/release/ToastMonitor-${version}-linux-$(uname -m).tar.gz"
+tar -czf "$archive" -C dist/linux .
+sha256sum "$archive" > "$archive.sha256"
+printf '%s\n' "$archive"

@@ -1,4 +1,4 @@
-import SwiftUI
+import Foundation
 
 /// The AI tools ToastMonitor tracks, plus the cloud quota panel.
 enum ToolKind: String, CaseIterable, Identifiable {
@@ -33,21 +33,6 @@ enum ToolKind: String, CaseIterable, Identifiable {
         case .omp: return "cpu"
         case .dsh: return "atom"
         case .openrouter: return "arrow.triangle.2.circlepath"
-        }
-    }
-
-    /// The product's own brand color where it has one; tools whose brand is
-    /// monochrome (OpenCode, Hermes) or unpublished (Oh My Pi) use a system
-    /// color so they stay distinguishable and adapt to appearance.
-    var color: Color {
-        switch self {
-        case .claude: return TMDesign.brand(0xD97757)       // Claude brand orange
-        case .codex: return TMDesign.brand(0x7A9DFF)        // Codex app icon gradient midpoint
-        case .dsh: return TMDesign.brand(0x4D6BFE)          // DeepSeek brand blue
-        case .openrouter: return TMDesign.brand(0x7624F4, dark: 0xC8FF00) // OpenRouter Grape / Volt
-        case .opencode: return Color(nsColor: .systemGreen)
-        case .hermes: return Color(nsColor: .systemPurple)
-        case .omp: return Color(nsColor: .systemTeal)
         }
     }
 

@@ -1,4 +1,5 @@
 import Foundation
+import CoreFoundation
 
 /// Orchestrates collection. A 1s foreground / 5s background poll uses cheap
 /// per-file stat checks, keeps the menu-bar token count fresh while the

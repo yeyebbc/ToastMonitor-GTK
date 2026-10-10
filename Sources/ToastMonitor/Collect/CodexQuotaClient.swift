@@ -1,5 +1,8 @@
 import Foundation
-import Combine
+import FoundationNetworking
+import OpenCombine
+import OpenCombineFoundation
+import OpenCombineDispatch
 
 /// Codex subscription quota via the official ChatGPT backend usage endpoint
 /// (same approach as CodexBar / steipete): reads the OAuth token from

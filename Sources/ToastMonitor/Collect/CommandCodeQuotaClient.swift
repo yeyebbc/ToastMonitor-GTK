@@ -1,5 +1,8 @@
 import Foundation
-import Combine
+import FoundationNetworking
+import OpenCombine
+import OpenCombineFoundation
+import OpenCombineDispatch
 
 /// Command Code subscription quota (GOAT plan) via the private billing API.
 ///

@@ -1,181 +1,112 @@
-# ToastMonitor
+# ToastMonitor-GTK
 
-[![macOS](https://img.shields.io/badge/macOS-13.0+-blue)](https://github.com/Toast1zz/ToastMonitor)
-[![Swift](https://img.shields.io/badge/Swift-5.10-orange)](Package.swift)
-[![License: MIT](https://img.shields.io/github/license/Toast1zz/ToastMonitor)](LICENSE)
+**The GNOME/Linux port of [Toast1zz/ToastMonitor](https://github.com/Toast1zz/ToastMonitor)**, the original macOS menu-bar AI usage monitor. This repository adapts its collection and accounting engine to a native GNOME tray application using [adwaita-swift](https://codeberg.org/aparoksha/adwaita-swift), GTK4 and libadwaita.
 
-Native macOS menu-bar AI usage monitor (SwiftUI + system SQLite, zero third-party dependencies).
+The original ToastMonitor is developed by Toast and distributed under the MIT license. This port preserves the upstream license and copyright notice. For the macOS application, visit the [original repository](https://github.com/Toast1zz/ToastMonitor); the build in this repository targets Linux.
 
-Aggregates token usage from **Claude Code, Codex, OpenCode, Hermes, Oh My Pi and DeepSeek Harness** local logs, plus **OpenRouter** cloud quota — everything rolls up into one "today" total, always visible in the menu bar.
+Collects **Claude Code, Codex, OpenCode, Hermes, Oh My Pi and DeepSeek Harness** logs into one local SQLite database. Retains the original parsers, deduplication, pricing and database migrations.
 
-<p align="center">
-  <img src="docs/images/popover.png" width="800" alt="ToastMonitor menu-bar popover in light and dark appearance: token total, sources, subscription quota and account balances">
-</p>
+- **Tray:** today’s token total, tooltip, dashboard, preferences, refresh and quit actions. Closing the window continues collection (1-second foreground / 5-second background scans).
+- **Dashboard:** today / 7 days / 30 days / all time, per-tool and per-model totals, daily analysis with CSV export, recent sessions.
+- **Accounts:** Claude subscription (opt-in), Codex subscription, OpenCode Go, Command Code, OpenRouter and DeepSeek balances/account spend. Errors retain the last successful quota values.
+- **Sources:** local-first; explicitly configured remote feeds for Claude, Codex, OpenCode and Hermes.
+- **Privacy:** usage stays local. Credentials use GNOME Secret Service (GNOME Keyring or another compatible provider). No analytics. Protected SQLite backups and redacted exports retain the original recovery safeguards.
 
-## Features
+## What changed for GNOME
 
-- **Live menu-bar total** — today's tokens only; click for the popover. It uses a template icon and system-colored count; the unread-quota dot is red
-- **Custom menu-bar font** — `Settings → Appearance → Font` opens the macOS font panel to pick any installed font for the menu-bar token count; defaults to System UI (SF Pro)
-- **Popover** — token total with Spent / Value, then cards for Sources, Quota, Balance and Activity. `Settings → Appearance → Customize…` chooses which cards and accounts appear; the total can be compact or full
-- **Subscription quotas** — one usage bar per window (Claude 5h / weekly, OpenCode Go rolling / weekly / monthly, Codex, Command Code) that fills as the quota is used, with its reset countdown; bars turn orange past 80%
-- **Balances** — OpenRouter and DeepSeek prepaid balances in their own card, written with currency symbols
-- **Claude usage outside this Mac** — Cowork, claude.ai chat and Claude Code on other machines leave no local transcript; their usage is estimated from the shared quota and shown as its own Sources row
-- **Dashboard (4 pages)** — every page fits the window without scrolling
-  - **Overview** — period figures (tokens, calls, actual spend, API value), tool and model breakdowns, a year of activity
-  - **Analysis** — tokens or estimated cost per day by tool or model over 7 / 30 / 90 days, with a per-day breakdown on hover and CSV export
-  - **Plans** — one card per connected account: quota windows, balances and balance history
-  - **Sessions** — every session, newest first, grouped by day
-- **Settings window** — ⌘, or the popover's gear button; a standard macOS settings window with General, Appearance, Sources, Accounts, Data and Updates panes
-- **Cross-source aggregation** — one SQLite store for tokens, cost and per-project breakdown across all tools, by day/week/month
-- **Built-in quotas** — no opencode-quota dependency; see [Quotas](#quotas-built-in-no-opencode-quota-dependency)
-- **DeepSeek account billing** — official balance plus experimental Platform account spend in the popover, following the selected day/week/month period; includes usage from other devices ([connect guide](docs/connect-deepseek.md))
-- **Cost estimation** — built-in model price table; unknown models count tokens without a price
-- **Privacy-first** — data stays on this Mac, credentials live only in the macOS Keychain, no analytics or ad SDKs
-
-<p align="center">
-  <img src="docs/images/dashboard.png" width="800" alt="ToastMonitor dashboard Overview page in light and dark appearance: period figures, tool and model breakdowns and a year of activity">
-</p>
-
-<p align="center">
-  <img src="docs/images/settings.png" width="800" alt="ToastMonitor settings window in light and dark appearance">
-</p>
-
-## Data sources
-
-| Tool | Local (Mac) source | Remote |
-|---|---|---|
-| Claude Code | `~/.claude/projects/*/*.jsonl`, plus Claude Desktop Cowork sessions that ran in local agent mode | VPS feed |
-| Codex | `~/.codex/sessions/.../rollout-*.jsonl` + `state_5.sqlite` | VPS feed |
-| OpenCode | `~/.local/share/opencode/opencode.db` | VPS feed |
-| Hermes | `~/.hermes/state.db` (column introspection) | VPS feed |
-| Oh My Pi | `~/.omp/agent/sessions/**/*.jsonl` | — (local only) |
-| DeepSeek Harness | `$DSH_HOME` (default `~/.dsh`) session logs + projection cache | — (local only) |
-| OpenRouter | Cloud API (key + credits snapshots) | — |
-| DeepSeek account | Platform balance + account-wide billed usage; API-key balance-only mode | — |
-
-### Collector memory use
-
-Claude, Codex and Oh My Pi JSONL scans read in 64 KiB chunks and parse one complete line at a time, rather than loading and byte-copying an entire file suffix into JSON dictionaries. Codex and Oh My Pi make a metadata pass before their event pass. OpenCode rows are folded directly from SQLite instead of first collecting every session row, and the collector keeps cross-source row counts rather than retaining completed source batches. Each source still prepares its own turns/sessions for atomic commit, so memory can grow with that source's output rows.
-
-Claude's non-local quota estimate streams indexed turn rows into sample-interval totals, using O(number of samples) Swift storage instead of materializing and sorting all Claude turns.
-
-DSH log scans seek through compressed input in bounded windows, then decompress and parse one frame at a time while folding pending-step state across frames. Peak scan memory therefore includes the largest compressed/decompressed frame and the source's output turn/session batch; neither frame size nor batch size is capped, and this is not an RSS guarantee. The Zstd result cache has a 16 MiB total-cost limit, caches only results no larger than 8 MiB per entry, and has an eight-entry limit; NSCache limits are advisory. Evicted or oversized frames may be decompressed again during a full-rescan pass.
-
-While visible, the dashboard prewarms all four page hosts; closing it or toggling it off releases those hosts. Settings pane hosts are released when Settings closes. This describes view-host lifetimes, not a process-wide RSS bound.
-
-### Remote feeds
-
-- Only addresses you **explicitly configure** in Sources & Settings are contacted; the app ships no personal IPs or default remote hosts
-- Addresses are validated client-side; credential requests never follow redirects
-- Remote feed polling uses a 15s foreground timer and continues in background at no more than one request per 60s through the collector loop; local and remote sources can be disabled independently
-
-### DeepSeek Harness (DSH)
-
-DSH token accounting maps 1:1 onto ToastMonitor's columns:
-
-| DSH bucket | ToastMonitor field |
+| Area | GNOME port |
 |---|---|
-| uncached input | `input_tokens` |
-| output (reasoning included, never separate) | `output_tokens` |
-| cache read | `cache_read` |
-| cache write | `cache_write` |
+| Interface | Native GTK4/libadwaita overview, analysis, plans, sessions and preferences replace the macOS SwiftUI interface. |
+| Tray | StatusNotifierItem and DBusMenu replace the macOS menu-bar integration. Closing a window hides it while collection continues; Quit stops the app. |
+| Appearance | GNOME sets fonts and light/dark appearance. A symbolic token icon follows the tray host's foreground color. |
+| Credentials | GNOME Secret Service replaces macOS Keychain. Existing Claude Code and Codex CLI login files are still used. |
+| Storage | XDG data directories replace macOS Application Support. SQLite migrations, backups, restore validation and exports are retained. |
+| Swift dependencies | OpenCombine and swift-crypto provide Linux-compatible equivalents for Combine and CryptoKit. SQLite, GIO and libsecret use system libraries. |
+| Distribution | Linux release archives, desktop entries, optional login autostart and a user-local installer replace macOS app bundles and the built-in updater. |
 
-Parsing uses two **mutually exclusive, sticky** modes (`dsh_parse_mode`; the choice never flips when zstd is installed/uninstalled, so the two accounting paths can never double-count):
+This is a platform adaptation rather than complete UI feature parity. The macOS font picker, browser-based DeepSeek login automation and updater are not available in the Linux build. DeepSeek credentials can be entered in Preferences. Historical macOS sources remain in the repository but are excluded from the Linux target.
 
-- **Log mode (primary)** — incremental parse of `sessions/**/session.jsonl.zstd` (independent zstd frames + byte cursor), with exact timestamps and model per step; cost estimated from the price table
-- **Cache mode (fallback)** — delta over the cumulative buckets in `storages/session_projcache.json`; no model or per-step timing; web sessions visible, headless sessions not
+## Requirements
 
-macOS ships no zstd support (Compression.framework covers LZ4/ZLIB/LZMA/LZFSE/BROTLI only), so the app looks for the `zstd` CLI on `PATH` and at standard install locations (`/opt/homebrew/bin`, `/usr/local/bin`, `/opt/local/bin`); when absent it degrades to cache mode without errors or data loss.
+Linux, Swift **6.0+**, GTK **4.14+**, libadwaita **1.5+**, SQLite and libsecret. The dependency is pinned to adwaita-swift **0.1.0**; upstream main requires an experimental newer Swift toolchain. `Package.resolved` locks transitive dependencies.
 
-## Quotas (built-in, no opencode-quota dependency)
+Ubuntu 24.04 / Linux Mint 22:
 
-- **OpenCode Go plan** (a separate entry from the OpenCode tool) — reads `opencode.ai/workspace/<id>/go` SolidJS SSR/data-slot data: 5h=$12 / week=$30 / month=$60 bars, reset countdown and history. Credentials: paste in `Settings → Accounts → OpenCode Go`, or `--provision-go <workspaceId>` reading the cookie from stdin (opencode-quota's opencode-go.json works)
-- **OpenRouter** — `/api/v1/key` + `/api/v1/credits` snapshotted every 60s while the UI is visible and every 5 minutes in background. Key: paste in the panel or `--provision-or-key` from stdin; the secret lives only in the macOS Keychain
-- **Claude subscription** (opt-in, off by default) — 5h / weekly / weekly-Opus rate-limit windows from `api.anthropic.com/api/oauth/usage`, using the login Claude Code already stored on this Mac. No credential to paste: the OAuth blob is read from `~/.claude/.credentials.json` and the `Claude Code-credentials` login-keychain item, newer expiry wins. **The read never prompts.** ToastMonitor's entry in that item's ACL is not durable (Claude Code rewrites the item several times a day as it refreshes the token); instead of surfacing a login-keychain password sheet from a background poll, an unauthorized read fails and is retried through `/usr/bin/security`, which Claude Code itself creates and updates the item through and which is therefore always trusted for it. ToastMonitor never modifies that item or its ACL
-- **Claude usage outside this Mac** — Cowork sessions that run server-side, claude.ai chat and Claude Code on other machines never write a local transcript, so their tokens cannot be counted. Instead, every successful Claude quota fetch is stored as a sample (5h and weekly percentages plus reset times). Within the current weekly window, a rise in weekly usage between two samples counts as non-local when this Mac recorded essentially no Claude Code activity in that interval (under 5,000 fresh tokens, with a 10-minute look-back for server aggregation lag). The popover shows `≈X% of weekly used outside this Mac` once the week has at least 4 intervals spanning 6 hours; hover it for details. It is a lower bound: the quota is only sampled while the popover or dashboard is open, and an interval with any local activity counts as local
-
-## Install & build
-
-```bash
-cd ~/Projects/ToastMonitor
-./scripts/build-app.sh        # release build → codesign → install to /Applications (skipped in CI)
+```sh
+sudo apt-get update
+sudo apt-get install -y libgtk-4-dev libadwaita-1-dev libsqlite3-dev libsecret-1-dev \
+  libssl-dev libcurl4-openssl-dev zstd xvfb dbus-x11
 ```
 
-- After switching to Apple Development signing for the first time, run `./scripts/authorize-local-keychain.sh` once; later builds from the same Team ID never prompt again. It only ever touches ToastMonitor's own `-s ToastMonitor` items — never Claude Code's or any other app's
-- Versioning comes from `vMAJOR.MINOR[.PATCH]` git tags; `TM_VERSION` / `TM_BUILD_NUMBER` are for controlled CI/release injection. Untagged local builds are explicitly `1.0` (development), never a commit hash
-- Distribution requires a Developer ID certificate; `build-app.sh` refuses ad-hoc signing and accepts an explicit identity via `TM_SIGNING_IDENTITY`
-- Or run the build product directly: `open dist/ToastMonitor.app`
+Clone this port and install Swift from [swift.org](https://www.swift.org/install/linux/). For a Swift 6.0.3 Ubuntu toolchain extracted under `~/dev-tools/`:
 
-### Release artifacts
-
-Every release ships the arm64 and universal zips plus a signed,
-architecture-aware update manifest (`appcast.json`) that powers in-app updates
-(Settings → Updates). Apple Silicon selects arm64;
-Intel selects the universal artifact. The legacy top-level fields remain a
-universal bootstrap for older clients. The manifest is Ed25519-signed with a
-key pair whose private half never leaves the maintainer's machine
-(`~/.config/toastmonitor/update-key.pem`, 0600); the app bakes in the public
-half.
-
-```bash
-./scripts/package-release.sh         # builds and zips both arm64 and universal apps
-# Sign an architecture-aware manifest directly into dist/release/.
-./scripts/sign-update-manifest.sh 1.2.3 \
-  dist/release/ToastMonitor-1.2.3-arm64.zip \
-  dist/release/ToastMonitor-1.2.3-universal.zip \
-  dist/release/appcast.json
-cp dist/release/appcast.json docs/appcast.json && cp dist/release/appcast.json appcast.json
-git add -A && git commit -m "Publish update manifest for v1.2.3" && git push
-gh release create vX.Y.Z dist/release/*.zip --title "..." --notes "..."
+```sh
+git clone https://github.com/yeyebbc/ToastMonitor-GTK.git ~/repos/ToastMonitor-GTK
+cd ~/repos/ToastMonitor-GTK
+export PATH="$HOME/dev-tools/swift-6.0.3-RELEASE-ubuntu24.04/usr/bin:$PATH"
+swift build
+swift test
+swift run ToastMonitor
 ```
 
-- The update feed is hosted on GitHub Pages (`https://toast1zz.github.io/ToastMonitor/appcast.json`, deployed from `docs/` on `main`); short cache headers make a new manifest visible to clients within a minute
-- Manifest `download_url` is tag-pinned (`/releases/download/vX.Y.Z/…`) — note the `v` prefix; `/releases/latest/...` lags fresh releases and raw.githubusercontent caches stale manifests for many minutes
-- Verify the live feed with `curl -s https://toast1zz.github.io/ToastMonitor/appcast.json`
-- The updater verifies the downloaded bundle before handing its staging directory to a detached installer. Installation waits for the running process to exit, preserves the old bundle as `ToastMonitor.app.tm-backup`, and removes that backup only after the replacement completes normal startup and acknowledges readiness. If installation fails, the next launch reports the failure in Settings → Updates. A read-only app location fails before the running app quits; move ToastMonitor to a writable folder before retrying. If the new app does not acknowledge launch, both bundles remain for manual recovery instead of deleting the backup on a timer.
+GNOME Shell does not display legacy tray icons by default. Install and enable [AppIndicator and KStatusNotifierItem Support](https://extensions.gnome.org/extension/615/appindicator-support/), e.g. `sudo apt-get install gnome-shell-extension-appindicator` on Ubuntu. The tray uses **StatusNotifierItem and DBusMenu over the session bus**, works on Wayland, and re-registers after a shell/extension restart. Other desktops with StatusNotifier support also work. Some hosts display only the icon; the total remains in its tooltip and menu. The application window remains accessible without a tray extension.
 
-## Command line (headless / development)
+The tray uses the bundled `toastmonitor-token-symbolic` SVG: a filled circle with a transparent five-point star cutout. GNOME controls its foreground color through the symbolic icon theme. The app publishes its icon directory via `IconThemePath`, so this also works when running directly from an extracted archive. The [freedesktop icon naming specification](https://specifications.freedesktop.org/icon-naming/latest/) does not define a standard token icon.
 
-```bash
-# Credential provisioning — always from stdin, never in argv
-printf '%s\n' 'sk-or-...' | dist/ToastMonitor.app/Contents/MacOS/ToastMonitor --provision-or-key
-printf '%s\n' 'auth_cookie' | dist/ToastMonitor.app/Contents/MacOS/ToastMonitor --provision-go <workspaceId>
-dist/ToastMonitor.app/Contents/MacOS/ToastMonitor --provision-hermes <feedURL>   # only explicitly configured addresses
-dist/ToastMonitor.app/Contents/MacOS/ToastMonitor --clear-or-key                 # clear
+A running, unlocked Secret Service is needed to save account credentials. Local collection works without it. The app does not copy macOS Keychain items; reconnect accounts on Linux. Claude and Codex continue reading their existing CLI login files.
+
+## Build and install
+
+```sh
+./scripts/build-app.sh                 # release binary and Linux resources → dist/linux/
+./scripts/install-linux.sh             # installs under ~/.local; no root required
+./scripts/install-linux.sh --autostart # also enables login startup
+ToastMonitor --background             # start hidden in the tray
+./scripts/package-release.sh          # Linux archive for the current architecture
 ```
 
-- `TM_DEBUG=1`: per-file scan decision logging
-- `--render-dashboard <path> [height] [width] [tab]`: headless Dashboard PNG render (no window or keychain needed); `dark`/`light` in the path selects the appearance; tab is `overview / analysis / plans / sessions`
-- `--render-popover <path> [height]`: headless popover PNG render
-- `--render-settings <path> [general|appearance|sources|data|updates] [height]`: headless render of one settings pane
-- `--show-settings [pane] [--appearance light|dark] [--capture-settings <path>]`: opens the real settings window (no collectors, no keychain)
-- `--show-panel`: open the popover on screen for inspection (does not start the OpenRouter / Go clients, so no Keychain prompts)
-- `--show-dashboard`: launch with the panel open
-- `--verify-status-toggle`: automated status-button toggle self-check (CI)
+For a staging install, set `DESTDIR` and `PREFIX` (default `$HOME/.local`). `SWIFT` can name a specific Swift executable. Launching the desktop entry again presents the existing window instead of starting another collector. Use **Quit** or Ctrl+Q to stop the app.
 
-## Architecture
+## Data and sources
 
-- **Single collection loop** — scans every 1s while the panel is visible, every 5s while hidden (to keep the menu bar fresh); incremental per-file reads keyed on (size, nanosecond mtime, inode); steady state is stat-only
-- **Single SQLite store** — `~/Library/Application Support/ToastMonitor/toastmonitor.db` (WAL)
-- **Cost estimation** — built-in price table for common models (Claude/GPT/DeepSeek, …); unknown models count tokens only; `backfillCosts()` corrects history idempotently
+Data: `$XDG_DATA_HOME/toastmonitor/toastmonitor.db` (default `~/.local/share/toastmonitor/toastmonitor.db`). Backups: the `backups/` subdirectory; private permissions (directories 0700, files 0600). Settings live in SQLite; secrets live only in Secret Service. `TM_DATABASE_PATH` provides an isolated database for tests.
 
-## Data, privacy & security
+| Tool | Local source |
+|---|---|
+| Claude Code | `~/.claude/projects/*/*.jsonl` |
+| Codex | `~/.codex/sessions/**/rollout-*.jsonl` and `state_5.sqlite` |
+| OpenCode | `~/.local/share/opencode/opencode.db` |
+| Hermes | `~/.hermes/state.db` and profile databases |
+| Oh My Pi | `~/.omp/agent/sessions/**/*.jsonl` |
+| DeepSeek Harness | `$DSH_HOME` (default `~/.dsh`) logs / projection cache |
 
-- **Updates** — callers must supply an HTTPS metadata URL plus an Ed25519 public key fixed to the artifact; `UpdateChecker` validates the metadata signature, version and SHA-256 of the download; the file is downloaded only after user confirmation and re-verified before use. Never auto-downloads, installs or executes updates
-- **Data maintenance** — `DataMaintenance.exportDatabase(to:)`, `clearAllData()`, local cleanup, protected backups and pre-restore validation; clearing forces a protected backup first; backups/exports land in the user directory restricted to the current user. Stop collection and keep the backup before clearing or restoring
-- **Privacy** — logs, usage, project paths and session metadata stay in the local SQLite by default; requests go out only to explicitly enabled remote feeds or quota services. Credentials are stored in the macOS Keychain, never in URLs, plists or diagnostic logs; no analytics or ad SDKs
+DSH log mode uses `zstd`; fallback cache mode is sticky to prevent double counting. Codex cached tokens are already included in input and are not added twice. Recorded spend and estimated API value remain separate.
 
-## Known limitations
+For macOS data migration, copy a protected database backup into the Linux data directory **before starting the app**. Do not copy a live WAL database without its WAL sidecar; use a SQLite backup instead. Never overwrite existing Linux usage without backing it up first.
 
-- The menu bar shows only today's tokens (user preference); cost and fixed subscriptions live in the tooltip/panel
-- Claude usage that leaves no local transcript (server-side Cowork, claude.ai chat, other machines) is estimated from the shared quota, never counted in tokens
-- The price table is approximate (official list prices); OpenCode's own cost field is used verbatim when present
-- DSH log mode depends on the `zstd` CLI (see lookup logic above); cache mode has no model, so cost is 0
+## Command line
 
-## Contributing
+`ToastMonitor --help` lists supported options. Credential values are read from stdin:
 
-See [CONTRIBUTING.md](CONTRIBUTING.md) for the build, test and PR workflow, and [SECURITY.md](SECURITY.md) for reporting vulnerabilities.
+```sh
+ToastMonitor --provision-or-key
+ToastMonitor --provision-go WORKSPACE_ID
+ToastMonitor --provision-commandcode
+ToastMonitor --provision-hermes https://your-host.example/usage.json
+ToastMonitor --export-diagnostics /tmp/toastmonitor-diagnostics.json
+```
 
-## License
+Paste secrets when prompted by stdin, or pipe them from a secret manager. Do not put secrets in shell command history. DeepSeek Platform sessions are pasted in Preferences; the macOS browser-login automation is not used on Linux. Updates use Linux packaging/rebuilds, not the macOS updater. Native GNOME fonts, colors and light/dark preference follow the desktop.
 
-MIT — see [LICENSE](LICENSE). Third-party system components remain under their own licenses.
+## Verification
+
+```sh
+swift test
+./scripts/smoke-linux.sh
+```
+
+The smoke check uses a private database, a session bus and Xvfb. It exercises the real application's tray properties, symbolic icon path, DBusMenu, single-instance activation, live refresh, window capture and quit action. Historical macOS UI and updater tests are excluded from the Linux target; the portable parser, quota, database, backup, restore and aggregation suites run on Linux.
+
+The initial port was verified with Swift 6.0.3, GTK 4.14.5 and libadwaita 1.5.0: **263 tests passed**, debug and release builds succeeded, and the isolated tray integration check passed. The symbolic icon was also checked for a transparent star cutout and host-controlled light/dark recoloring. Staged installation and the release archive checksum were verified. Linux CI runs build, tests, tray smoke and release compilation on Ubuntu 24.04.
+
+MIT license. See [LICENSE](LICENSE).

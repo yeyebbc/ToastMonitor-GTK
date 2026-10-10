@@ -1,4 +1,5 @@
 import Foundation
+import FoundationNetworking
 
 /// Platform billing is an experimental, authenticated website API. It is not
 /// inferred from wallet deltas or local session logs.
@@ -81,7 +82,10 @@ enum DeepSeekBilling {
             formatter.numberStyle = .decimal
             formatter.minimumFractionDigits = 2
             formatter.maximumFractionDigits = 2
-            return "\(currency) \(formatter.string(from: NSDecimalNumber(decimal: amount)) ?? "-")"
+            var source = amount
+            var rounded = Decimal()
+            NSDecimalRound(&rounded, &source, 2, .plain)
+            return "\(currency) \(formatter.string(from: NSDecimalNumber(decimal: rounded)) ?? "-")"
         }
 
         /// Symbol form for the popover ("$1.74", "¥7.67"), matching how every
