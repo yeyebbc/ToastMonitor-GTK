@@ -19,15 +19,31 @@ struct MonitorView: View {
                     MenuButton("Sessions") { runtime.show(.sessions) }
                     MenuButton("Preferences") { runtime.show(.preferences) }
                 }
-                    .hexpand()
-                Menu(UsagePeriodSettings.shared.configuration.label(for: runtime.period)) {
-                    MenuButton("Today") { runtime.period = .today; runtime.refresh() }
-                    MenuButton("Week / 7 Days") { runtime.period = .week; runtime.refresh() }
-                    MenuButton("Month / 30 Days") { runtime.period = .month; runtime.refresh() }
-                    MenuButton("All Time") { runtime.period = .all; runtime.refresh() }
+                .hexpand().padding(12, [.trailing])
+                if runtime.page == .overview || runtime.page == .plans {
+                    Menu(UsagePeriodSettings.shared.configuration.label(for: runtime.period)) {
+                        MenuButton("Today") {
+                            runtime.period = .today
+                            runtime.refresh()
+                        }
+                        MenuButton("Week / 7 Days") {
+                            runtime.period = .week
+                            runtime.refresh()
+                        }
+                        MenuButton("Month / 30 Days") {
+                            runtime.period = .month
+                            runtime.refresh()
+                        }
+                        MenuButton("All Time") {
+                            runtime.period = .all
+                            runtime.refresh()
+                        }
+                    }
+                    .tooltip("Usage period")
                 }
             }
-            .padding()
+            .frame(maxWidth: 720)
+            .padding(24, [.leading, .trailing, .top])
             ScrollView {
                 VStack {
                     if runtime.page == .overview {
@@ -41,15 +57,22 @@ struct MonitorView: View {
                     } else {
                         PreferencesView(runtime: runtime)
                     }
-                    if !runtime.message.isEmpty {
-                        Text(runtime.message).wrap().halign(.start).padding()
-                    }
                 }
                 .spacing(24)
-                .padding()
-
+                .frame(maxWidth: 720)
+                .padding(24)
             }
             .vexpand()
+            if !runtime.message.isEmpty {
+                Separator()
+                HStack {
+                    Text(runtime.message).selectable().wrap().xalign(0).hexpand().padding(12, [.trailing])
+                    Button("Dismiss") { runtime.message = "" }.valign(.center)
+                }
+                .frame(maxWidth: 720)
+                .padding(12, [.top, .bottom])
+                .padding(24, [.leading, .trailing])
+            }
         }
         .topToolbar {
             HeaderBar {
@@ -68,35 +91,57 @@ struct MonitorView: View {
     @ViewBuilder var overview: Body {
         if let snapshot = runtime.snapshot {
             VStack {
-            PreferencesGroup()
-                .title(UsagePeriodSettings.shared.configuration.title(for: runtime.period))
-                .child {
-                    metric("Tokens", Format.full(selectedTokens(snapshot)))
-                    metric("Model Calls", Format.full(selectedTotals(snapshot).count))
-                    metric("API Value", Format.money(selectedValue(snapshot)), "Estimated at public model prices")
-                    metric("Recorded Spend", Format.money(selectedCost(snapshot).actual), "Provider-reported cost; subscription fees are separate")
-                }
-            PreferencesGroup()
-                .title("Sources")
-                .description("Input, output and cached tokens; Codex input already includes its cache.")
-                .child {
-                    ForEach(selectedRows(snapshot)) { total in
-                        metric(ToolKind(rawValue: total.tool)?.displayName ?? total.tool,
-                               Format.compact(ToolKind(rawValue: total.tool)?.totalTokens(total) ?? total.input),
-                               "\(Format.full(total.count)) calls · \(Format.money(total.cost)) API value")
+                PreferencesGroup()
+                    .title(UsagePeriodSettings.shared.configuration.title(for: runtime.period))
+                    .child {
+                        metric("Tokens", Format.full(selectedTokens(snapshot)))
+                        metric("Model Calls", Format.full(selectedTotals(snapshot).count))
+                        metric("API Value", Format.money(selectedValue(snapshot)), "Estimated at public model prices")
+                        metric(
+                            "Recorded Spend", Format.money(selectedCost(snapshot).actual),
+                            "Provider-reported cost; subscription fees are separate")
                     }
-                    if selectedRows(snapshot).isEmpty {
-                        ActionRow().title("No usage yet").subtitle("Use one of the supported tools. Local logs are collected automatically.").useMarkup(false)
+                PreferencesGroup()
+                    .title("Sources")
+                    .description("Input, output and cached tokens; Codex input already includes its cache.")
+                    .child {
+                        let totals = selectedRows(snapshot)
+                        NativePreferencesRows(
+                            rows: totals.isEmpty
+                                ? [
+                                    NativePreferencesRow(
+                                        "empty",
+                                        ActionRow().title("No usage yet")
+                                            .subtitle(
+                                                "Use one of the supported tools. Local logs are collected automatically."
+                                            )
+                                            .useMarkup(false))
+                                ]
+                                : totals.map { total in
+                                    NativePreferencesRow(
+                                        total.id,
+                                        metric(
+                                            ToolKind(rawValue: total.tool)?.displayName ?? total.tool,
+                                            Format.compact(
+                                                ToolKind(rawValue: total.tool)?.totalTokens(total) ?? total.input),
+                                            "\(Format.full(total.count)) calls · \(Format.money(total.cost)) API value")
+                                    )
+                                })
+                    }
+                if !runtime.models.isEmpty {
+                    PreferencesGroup().title("Models").child {
+                        List(Array(runtime.models.prefix(20)), selection: nil) { model in
+                            metric(
+                                model.model,
+                                Format.compact(
+                                    ToolKind(rawValue: model.tool)?.totalTokens(
+                                        input: model.input, output: model.output, cacheRead: model.cacheRead)
+                                        ?? (model.input + model.output)),
+                                "\(ToolKind(rawValue: model.tool)?.displayName ?? model.tool) · \(Format.money(model.cost))"
+                            )
+                        }.boxedList()
                     }
                 }
-            if !runtime.models.isEmpty {
-            PreferencesGroup().title("Models").child {
-                ForEach(Array(runtime.models.prefix(20))) { model in
-                    metric(model.model, Format.compact(ToolKind(rawValue: model.tool)?.totalTokens(input: model.input, output: model.output, cacheRead: model.cacheRead) ?? (model.input + model.output)),
-                           "\(ToolKind(rawValue: model.tool)?.displayName ?? model.tool) · \(Format.money(model.cost))")
-                }
-            }
-            }
             }.spacing(24)
         } else {
             Text("Collecting local usage…").padding()
@@ -105,115 +150,209 @@ struct MonitorView: View {
 
     @ViewBuilder var analysis: Body {
         PreferencesGroup().title("Daily Usage · Last 30 Days").child {
-            ForEach(runtime.daily.sorted { $0.day > $1.day }) { day in
-                metric(Format.dayKeyString(day.day), Format.compact(ToolKind(rawValue: day.tool)?.totalTokens(input: day.input, output: day.output, cacheRead: day.cacheRead) ?? day.input),
-                       "\(ToolKind(rawValue: day.tool)?.displayName ?? day.tool) · \(Format.full(day.count)) calls · \(Format.money(day.cost))")
-            }
-            if runtime.daily.isEmpty {
-                ActionRow().title("No daily history yet").subtitle("Daily totals will appear after usage is collected.").useMarkup(false)
-            }
+            NativePreferencesRows(
+                rows: runtime.daily.isEmpty
+                    ? [
+                        NativePreferencesRow(
+                            "empty",
+                            ActionRow().title("No daily history yet")
+                                .subtitle("Daily totals will appear after usage is collected.").useMarkup(false))
+                    ]
+                    : runtime.daily.sorted { $0.day > $1.day }.map { day in
+                        NativePreferencesRow(
+                            day.id,
+                            metric(
+                                Format.dayKeyString(day.day),
+                                Format.compact(
+                                    ToolKind(rawValue: day.tool)?.totalTokens(
+                                        input: day.input, output: day.output, cacheRead: day.cacheRead) ?? day.input),
+                                "\(ToolKind(rawValue: day.tool)?.displayName ?? day.tool) · \(Format.full(day.count)) calls · \(Format.money(day.cost))"
+                            ))
+                    })
         }
         Button("Export Daily CSV") {
             do {
                 let directory = LinuxPaths.dataDirectory().appendingPathComponent("exports", isDirectory: true)
-                try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true, attributes: [.posixPermissions: 0o700])
+                try FileManager.default.createDirectory(
+                    at: directory, withIntermediateDirectories: true, attributes: [.posixPermissions: 0o700])
                 let path = directory.appendingPathComponent("usage-\(Int(Date().timeIntervalSince1970)).csv")
-                let content = "day,tool,input,output,cache_read,api_value_usd,calls\n" + runtime.daily.map {
-                    "\(Format.dayKeyString($0.day)),\($0.tool),\($0.input),\($0.output),\($0.cacheRead),\($0.cost),\($0.count)"
-                }.joined(separator: "\n") + "\n"
+                let content =
+                    "day,tool,input,output,cache_read,api_value_usd,calls\n"
+                    + runtime.daily.map {
+                        "\(Format.dayKeyString($0.day)),\($0.tool),\($0.input),\($0.output),\($0.cacheRead),\($0.cost),\($0.count)"
+                    }.joined(separator: "\n") + "\n"
                 try content.write(to: path, atomically: true, encoding: .utf8)
                 try FileManager.default.setAttributes([.posixPermissions: 0o600], ofItemAtPath: path.path)
                 runtime.message = "Exported to \(path.path)"
             } catch { runtime.message = "Export failed: \(error.localizedDescription)" }
-        }.padding()
+        }.halign(.start).insensitive(runtime.daily.isEmpty)
     }
 
     @ViewBuilder var plans: Body {
-        VStack {
         // The lightweight refresh revision also refreshes these collector states.
         let _ = runtime.revision
-        PreferencesGroup().title("Claude Subscription").child {
-            let state = ClaudeQuotaClient.shared.state
-            if !ClaudeQuotaClient.shared.enabled {
-                metric("Quota monitoring is off", "", "Enable it in Preferences to read your existing Claude Code login.")
-            }
-            if let window = state.fiveHour { quota("5-hour Window", Double(window.usedPercent), window.resetAt) }
-            if let window = state.sevenDay { quota("Weekly", Double(window.usedPercent), window.resetAt) }
-            if let window = state.sevenDayOpus { quota("Weekly Opus", Double(window.usedPercent), window.resetAt) }
-            if let error = state.error { metric("Last refresh", "", error) }
+        VStack { planGroups }.spacing(24)
+    }
+
+    private var planGroups: Body {
+        var groups: Body = []
+        var rows: [NativePreferencesRow] = []
+        let claude = ClaudeQuotaClient.shared.state
+        if !ClaudeQuotaClient.shared.enabled {
+            rows.append(
+                .init(
+                    "disabled",
+                    metric(
+                        "Quota monitoring is off", "",
+                        "Enable it in Preferences to read your existing Claude Code login.")))
         }
-        PreferencesGroup().title("Codex Subscription").child {
-            let state = CodexQuotaClient.shared.state
-            if let percent = state.primaryPct { quota(state.planType ?? "Quota", Double(percent), state.resetAt) }
-            if let error = state.error { metric("Last refresh", "", error) }
-            if state.primaryPct == nil && state.error == nil { metric("No quota available", "", "Sign in using the Codex CLI.") }
+        if let window = claude.fiveHour {
+            rows.append(.init("five-hour", quota("5-hour Window", Double(window.usedPercent), window.resetAt)))
         }
-        PreferencesGroup().title("OpenCode Go").child {
-            let state = OpenCodeGoClient.shared.state
-            if let value = state.rollingPct { quota("Rolling", value, state.rollingReset) }
-            if let value = state.weeklyPct { quota("Weekly", value, state.weeklyReset) }
-            if let value = state.monthlyPct { quota("Monthly", value, state.monthlyReset) }
-            if !OpenCodeGoClient.shared.configured { metric("Not connected", "", "Add your workspace and session cookie in Preferences.") }
-            if let error = state.error { metric("Last refresh", "", error) }
+        if let window = claude.sevenDay {
+            rows.append(.init("weekly", quota("Weekly", Double(window.usedPercent), window.resetAt)))
         }
-        PreferencesGroup().title("OpenRouter").child {
-            let state = OpenRouterClient.shared.state
-            if let balance = state.accountBalance { metric("Account Balance", Format.money(balance)) }
-            metric("Today's Spend", Format.money(state.usageDaily))
-            if !OpenRouterClient.shared.hasKey { metric("Not connected", "", "Add an API key in Preferences.") }
-            if let error = state.error { metric("Last refresh", "", error) }
+        if let window = claude.sevenDayOpus {
+            rows.append(.init("opus", quota("Weekly Opus", Double(window.usedPercent), window.resetAt)))
         }
-        PreferencesGroup().title("Command Code").child {
-            let state = CommandCodeQuotaClient.shared.state
-            if let percent = state.monthlyUsedPercent { quota(state.planName ?? "Monthly", percent, state.billingPeriodEnd.map { Int64($0.timeIntervalSince1970) }) }
-            if let value = state.monthlyCreditsRemaining { metric("Credits Remaining", Format.money(value)) }
-            if !state.configured { metric("Not connected", "", "Add a Studio cookie in Preferences.") }
-            if let error = state.error { metric("Last refresh", "", error) }
+        if let error = claude.error { rows.append(.init("error", metric("Last refresh", "", error))) }
+        groups.append(planGroup("Claude Subscription", rows))
+
+        rows = []
+        let codex = CodexQuotaClient.shared.state
+        if let percent = codex.primaryPct {
+            rows.append(.init("quota", quota(codex.planType ?? "Quota", Double(percent), codex.resetAt)))
         }
-        PreferencesGroup().title("DeepSeek").child {
-            let state = DeepSeekBillingClient.shared.state
-            if let balance = state.balance {
-                metric("Balance", balance.formatted)
-            }
-            if let spend = state.spend { metric("Period Spend", spend.amounts.map { $0.formatted }.joined(separator: " / ")) }
-            if state.kind == nil { metric("Not connected", "", "Connect an API key or Platform session token in Preferences.") }
-            if let error = state.balanceError ?? state.spendError { metric("Last refresh", "", error) }
+        if let error = codex.error { rows.append(.init("error", metric("Last refresh", "", error))) }
+        if codex.primaryPct == nil && codex.error == nil {
+            rows.append(.init("empty", metric("No quota available", "", "Sign in using the Codex CLI.")))
         }
-        if let snapshot = runtime.snapshot {
-            PreferencesGroup().title("Fixed Subscriptions").child {
-                ForEach(snapshot.subscriptions) { subscription in
-                    metric(subscription.name, "\(subscription.price) \(subscription.currency)", "\(subscription.plan) · \(subscription.cycle)")
-                }
-            }
+        groups.append(planGroup("Codex Subscription", rows))
+
+        rows = []
+        let go = OpenCodeGoClient.shared.state
+        if let value = go.rollingPct { rows.append(.init("rolling", quota("Rolling", value, go.rollingReset))) }
+        if let value = go.weeklyPct { rows.append(.init("weekly", quota("Weekly", value, go.weeklyReset))) }
+        if let value = go.monthlyPct { rows.append(.init("monthly", quota("Monthly", value, go.monthlyReset))) }
+        if !OpenCodeGoClient.shared.configured {
+            rows.append(
+                .init("empty", metric("Not connected", "", "Add your workspace and session cookie in Preferences.")))
         }
-        }.spacing(24)
+        if let error = go.error { rows.append(.init("error", metric("Last refresh", "", error))) }
+        groups.append(planGroup("OpenCode Go", rows))
+
+        rows = []
+        let router = OpenRouterClient.shared.state
+        if let balance = router.accountBalance {
+            rows.append(.init("balance", metric("Account Balance", Format.money(balance))))
+        }
+        if router.lastOK > 0 { rows.append(.init("spend", metric("Today's Spend", Format.money(router.usageDaily)))) }
+        if !OpenRouterClient.shared.hasKey {
+            rows.append(.init("empty", metric("Not connected", "", "Add an API key in Preferences.")))
+        }
+        if let error = router.error { rows.append(.init("error", metric("Last refresh", "", error))) }
+        groups.append(planGroup("OpenRouter", rows))
+
+        rows = []
+        let command = CommandCodeQuotaClient.shared.state
+        if let percent = command.monthlyUsedPercent {
+            rows.append(
+                .init(
+                    "monthly",
+                    quota(
+                        command.planName ?? "Monthly", percent,
+                        command.billingPeriodEnd.map { Int64($0.timeIntervalSince1970) })))
+        }
+        if let value = command.monthlyCreditsRemaining {
+            rows.append(.init("credits", metric("Credits Remaining", Format.money(value))))
+        }
+        if !command.configured {
+            rows.append(.init("empty", metric("Not connected", "", "Add a Studio cookie in Preferences.")))
+        }
+        if let error = command.error { rows.append(.init("error", metric("Last refresh", "", error))) }
+        groups.append(planGroup("Command Code", rows))
+
+        rows = []
+        let deepSeek = DeepSeekBillingClient.shared.state
+        if let balance = deepSeek.balance { rows.append(.init("balance", metric("Balance", balance.formatted))) }
+        if let spend = deepSeek.spend {
+            rows.append(
+                .init("spend", metric("Period Spend", spend.amounts.map { $0.formatted }.joined(separator: " / "))))
+        }
+        if deepSeek.kind == nil {
+            rows.append(
+                .init(
+                    "empty", metric("Not connected", "", "Connect an API key or Platform session token in Preferences.")
+                ))
+        }
+        if let error = deepSeek.balanceError ?? deepSeek.spendError {
+            rows.append(.init("error", metric("Last refresh", "", error)))
+        }
+        groups.append(planGroup("DeepSeek", rows))
+
+        groups.append(
+            planGroup(
+                "Fixed Subscriptions",
+                (runtime.snapshot?.subscriptions ?? []).map { subscription in
+                    .init(
+                        String(subscription.id),
+                        metric(
+                            subscription.name, "\(subscription.price) \(subscription.currency)",
+                            "\(subscription.plan) · \(subscription.cycle)"))
+                }))
+        return groups
+    }
+
+    private func planGroup(_ title: String, _ rows: [NativePreferencesRow]) -> AnyView {
+        PreferencesGroup().title(title).child { NativePreferencesRows(rows: rows) }
     }
 
     @ViewBuilder var sessionList: Body {
         PreferencesGroup().title("Recent Sessions").description("Newest first · up to 200 sessions").child {
-            ForEach(runtime.sessions) { session in
-                metric(session.title ?? session.sessionID, Format.compact(ToolKind(rawValue: session.tool)?.totalTokens(input: session.input, output: session.output, cacheRead: session.cacheRead) ?? session.input),
-                       "\(ToolKind(rawValue: session.tool)?.displayName ?? session.tool) · \(session.project ?? "No project") · \(Format.dateTime(session.updated)) · \(Format.money(session.cost))")
-            }
-            if runtime.sessions.isEmpty {
-                ActionRow().title("No sessions yet").subtitle("Collected sessions will appear here automatically.").useMarkup(false)
-            }
+            NativePreferencesRows(
+                rows: runtime.sessions.isEmpty
+                    ? [
+                        NativePreferencesRow(
+                            "empty",
+                            ActionRow().title("No sessions yet")
+                                .subtitle("Collected sessions will appear here automatically.").useMarkup(false))
+                    ]
+                    : runtime.sessions.map { session in
+                        NativePreferencesRow(
+                            session.id,
+                            metric(
+                                session.title ?? session.sessionID,
+                                Format.compact(
+                                    ToolKind(rawValue: session.tool)?.totalTokens(
+                                        input: session.input, output: session.output, cacheRead: session.cacheRead)
+                                        ?? session.input),
+                                "\(ToolKind(rawValue: session.tool)?.displayName ?? session.tool) · \(session.project ?? "No project") · \(session.updated > 0 ? Format.dateTime(session.updated) : "—") · \(Format.money(session.cost))"
+                            ))
+                    })
         }
     }
 
     func metric(_ title: String, _ value: String, _ subtitle: String? = nil) -> AnyView {
-        ActionRow().title(title).subtitle(subtitle).useMarkup(false).titleLines(1).subtitleLines(2)
-            .suffix { Text(value).padding() }
+        ActionRow().title(title).subtitle(subtitle).useMarkup(false).titleLines(2).subtitleLines(3)
+            .suffix {
+                if !value.isEmpty {
+                    Text(value).selectable().xalign(1).style("heading").padding(12, [.leading])
+                }
+            }
+            .tooltip([title, subtitle, value].compactMap { $0 }.filter { !$0.isEmpty }.joined(separator: "\n"))
     }
 
     func quota(_ title: String, _ percent: Double, _ reset: Int64?) -> AnyView {
-        ActionRow().title(title).useMarkup(false)
-            .subtitle(reset.map { "Resets \(Format.countdown($0 - Int64(Date().timeIntervalSince1970)))" } ?? "Reset time unavailable")
+        ActionRow().title(title).useMarkup(false).titleLines(2).subtitleLines(2)
+            .subtitle(
+                reset.map { "Resets \(Format.countdown($0 - Int64(Date().timeIntervalSince1970)))" }
+                    ?? "Reset time unavailable"
+            )
             .suffix {
                 VStack {
-                    Text("\(Int(percent.rounded()))% used")
+                    Text("\(Int(percent.rounded()))% used").style("heading")
                     ProgressBar().fraction(min(max(percent / 100, 0), 1))
-                }.frame(minWidth: 130).padding()
+                }.spacing(6).frame(minWidth: 120).padding(12, [.leading])
             }
     }
 

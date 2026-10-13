@@ -68,7 +68,11 @@ final class LinuxRuntime {
         let currentVisibility = window.map { tm_window_visible($0) != 0 } ?? false
         if currentVisibility != visible {
             visible = currentVisibility
-            NotificationCenter.default.post(name: TMNotifications.dashboardVisibility, object: visible)
+            // Foreground observers can start quota requests even when start()
+            // skipped the collectors. Keep isolated previews fully offline.
+            if ProcessInfo.processInfo.environment["TM_TEST_MODE"] != "1" {
+                NotificationCenter.default.post(name: TMNotifications.dashboardVisibility, object: visible)
+            }
             if visible { lastRefresh = .distantPast }
         }
         if Date().timeIntervalSince(lastRefresh) >= TMRefreshPolicy.snapshotInterval(foreground: visible) { refresh() }
