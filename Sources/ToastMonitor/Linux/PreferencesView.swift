@@ -10,7 +10,7 @@ struct PreferencesView: View {
     @State private var commandCookie = ""
     @State private var deepSeekToken = ""
     @State private var platformToken = false
-    @State private var feedURL = ""
+    @State private var feedURL = HermesRemoteClient.shared.feedURL
     @State private var subscriptionName = ""
     @State private var subscriptionPrice = ""
     @State private var annualSubscription = false
@@ -77,10 +77,19 @@ struct PreferencesView: View {
                     NativePreferencesRows(rows: sourceRows)
                 }
                 Button("Save Feed URL") {
-                    runtime.message =
-                        HermesRemoteClient.shared.provision(url: feedURL.isEmpty ? nil : feedURL)
-                        ? "Remote feed saved" : "Invalid feed URL: use HTTPS or a private network address."
-                    if !runtime.message.hasPrefix("Invalid") { feedURL = "" }
+                    let remote = HermesRemoteClient.shared
+                    guard remote.provision(url: feedURL) else {
+                        runtime.message = "Could not save feed URL. Use HTTPS or a private network address and check database permissions."
+                        return
+                    }
+                    // Keep the persisted URL visible: saving an empty draft
+                    // removes the feed, so clearing it here made a second save
+                    // silently disable a successfully configured connection.
+                    feedURL = remote.feedURL
+                    runtime.message = feedURL.isEmpty ? "Remote feed disabled" : "Remote feed saved"
+                    if !feedURL.isEmpty {
+                        remote.poll { runtime.refresh() }
+                    }
                 }.halign(.start)
             }.spacing(12)
             VStack {
@@ -240,8 +249,12 @@ struct PreferencesView: View {
                     } set: { value in
                         if value && HermesRemoteClient.shared.feedURL.isEmpty {
                             runtime.message = "Save a remote feed URL before switching sources."
+                        } else if !tool.setSource(remote: value) {
+                            runtime.message = "Could not save source. Check database permissions."
                         } else {
-                            _ = tool.setSource(remote: value)
+                            if value {
+                                HermesRemoteClient.shared.poll { runtime.refresh() }
+                            }
                             runtime.refreshNow()
                         }
                     })

@@ -66,7 +66,7 @@ ToastMonitor --background             # start hidden in the tray
 ./scripts/package-deb.sh              # Debian/Ubuntu package → dist/release/
 ```
 
-Building a `.deb` also requires `dpkg-dev` (for `dpkg-shlibdeps` and `dpkg-architecture`). The package bundles the Swift runtimes, declares system-library dependencies, and installs under `/usr`. Install it with `sudo apt install ./dist/release/toastmonitor_1.0.1-1_amd64.deb` (adjust the filename for your version and architecture). `TM_VERSION` and `TM_DEB_REVISION` set the package version; `TM_DEB_MAINTAINER` optionally sets its maintainer field. Installation does not enable login autostart.
+Building a `.deb` also requires `dpkg-dev` (for `dpkg-shlibdeps` and `dpkg-architecture`). The package bundles the Swift runtimes, declares system-library dependencies, and installs under `/usr`. Install it with `sudo apt install ./dist/release/toastmonitor_1.0.2-1_amd64.deb` (adjust the filename for your version and architecture). `TM_VERSION` and `TM_DEB_REVISION` set the package version; `TM_DEB_MAINTAINER` optionally sets its maintainer field. Installation does not enable login autostart.
 
 GitHub Actions compiles, tests and packages the application on pushes to `main`, pull requests, and manual runs. Download the `.deb` and SHA-256 checksum from the run's `toastmonitor-linux-amd64-<commit>` artifact, retained for 30 days. CI uses the run number as the Debian revision; manual runs can set the package version. Both the debug application and the extracted release package undergo the isolated tray integration check. No package is installed or release published by this workflow.
 

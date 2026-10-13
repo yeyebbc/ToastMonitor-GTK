@@ -6,7 +6,7 @@ project_dir="$PWD"
 for tool in dpkg-deb dpkg-shlibdeps dpkg-architecture python3; do
   command -v "$tool" >/dev/null || { echo "$tool is required to build a Debian package." >&2; exit 1; }
 done
-version="${TM_VERSION:-1.0.1}"
+version="${TM_VERSION:-1.0.2}"
 revision="${TM_DEB_REVISION:-1}"
 [[ "$version" =~ ^[0-9]+(\.[0-9]+){1,2}$ ]] || { echo "TM_VERSION must be numeric" >&2; exit 1; }
 [[ "$revision" =~ ^[0-9]+$ ]] || { echo "TM_DEB_REVISION must be numeric" >&2; exit 1; }
