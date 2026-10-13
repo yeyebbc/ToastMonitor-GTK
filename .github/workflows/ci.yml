@@ -1,27 +1,63 @@
-name: Linux CI
+name: Linux CI and packaging
 "on":
   push:
     branches: [main]
   pull_request:
     branches: [main]
   workflow_dispatch:
+    inputs:
+      version:
+        description: Package version (for example, 1.0.0)
+        required: true
+        default: "1.0.0"
+        type: string
 permissions:
   contents: read
+concurrency:
+  group: linux-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
 jobs:
-  build-and-test:
+  build-test-and-package:
     runs-on: ubuntu-24.04
     container: swift:6.0.3-noble
+    timeout-minutes: 45
+    env:
+      TM_VERSION: ${{ inputs.version || '1.0.0' }}
+      TM_DEB_REVISION: ${{ github.run_number }}
+      SWIFT_JOBS: "4"
     steps:
       - uses: actions/checkout@v4
       - name: Install GNOME dependencies
         run: |
           apt-get update
-          apt-get install -y libgtk-4-dev libadwaita-1-dev libsqlite3-dev libsecret-1-dev libssl-dev libcurl4-openssl-dev zstd xvfb dbus-x11
+          apt-get install -y libgtk-4-dev libadwaita-1-dev libsqlite3-dev libsecret-1-dev libssl-dev libcurl4-openssl-dev zstd xvfb dbus-x11 python3 dpkg-dev desktop-file-utils
       - name: Build
         run: swift build -j 4
       - name: Test
         run: swift test -j 4
       - name: Tray integration smoke
         run: ./scripts/smoke-linux.sh
-      - name: Release compilation
-        run: swift build -c release -j 4
+      - name: Compile and package release
+        run: ./scripts/package-deb.sh
+      - name: Verify Debian package
+        shell: bash
+        run: |
+          set -euo pipefail
+          package_root="$RUNNER_TEMP/toastmonitor-deb"
+          dpkg-deb --info dist/release/*.deb
+          dpkg-deb --extract dist/release/*.deb "$package_root"
+          desktop-file-validate "$package_root/usr/share/applications/io.github.yeyebbc.ToastMonitor.desktop"
+          (cd dist/release && sha256sum -c *.deb.sha256)
+          export LD_LIBRARY_PATH="$package_root/usr/lib/toastmonitor"
+          export TM_SMOKE_BINARY="$package_root/usr/bin/ToastMonitor"
+          "$TM_SMOKE_BINARY" --version
+          dbus-run-session --config-file scripts/smoke-linux-bus.conf -- xvfb-run -a bash scripts/smoke-linux-session.sh
+      - name: Upload Debian package and checksum
+        uses: actions/upload-artifact@v4
+        with:
+          name: toastmonitor-linux-amd64-${{ github.sha }}
+          path: |
+            dist/release/*.deb
+            dist/release/*.deb.sha256
+          if-no-files-found: error
+          retention-days: 30
