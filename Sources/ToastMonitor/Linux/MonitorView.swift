@@ -10,40 +10,19 @@ struct MonitorView: View {
     }
 
     @ViewBuilder var content: Body {
+        // The switcher compares previous bindings; snapshot the getter so external
+        // navigation (tray, keyboard shortcuts) updates its selected tab too.
+        let selectedPage = runtime.page
         VStack {
-            HStack {
-                Menu(runtime.page.rawValue) {
-                    MenuButton("Overview") { runtime.show(.overview) }
-                    MenuButton("Analysis") { runtime.show(.analysis) }
-                    MenuButton("Plans") { runtime.show(.plans) }
-                    MenuButton("Sessions") { runtime.show(.sessions) }
-                    MenuButton("Preferences") { runtime.show(.preferences) }
-                }
-                .hexpand().padding(12, [.trailing])
-                if runtime.page == .overview || runtime.page == .plans {
-                    Menu(UsagePeriodSettings.shared.configuration.label(for: runtime.period)) {
-                        MenuButton("Today") {
-                            runtime.period = .today
-                            runtime.refresh()
-                        }
-                        MenuButton("Week / 7 Days") {
-                            runtime.period = .week
-                            runtime.refresh()
-                        }
-                        MenuButton("Month / 30 Days") {
-                            runtime.period = .month
-                            runtime.refresh()
-                        }
-                        MenuButton("All Time") {
-                            runtime.period = .all
-                            runtime.refresh()
-                        }
-                    }
-                    .tooltip("Usage period")
-                }
+            ScrollView {
+                ViewSwitcher(selection: Binding(get: { selectedPage }, set: { runtime.show($0) }))
+                    .readableTitles()
+                    .halign(.center)
+                    .padding(12, [.top, .bottom])
+                    .padding(24, [.leading, .trailing])
             }
-            .frame(maxWidth: 720)
-            .padding(24, [.leading, .trailing, .top])
+            .horizontalNavigation()
+            Separator()
             ScrollView {
                 VStack {
                     if runtime.page == .overview {
@@ -66,9 +45,10 @@ struct MonitorView: View {
             if !runtime.message.isEmpty {
                 Separator()
                 HStack {
-                    Text(runtime.message).selectable().wrap().xalign(0).hexpand().padding(12, [.trailing])
+                    Text(runtime.message).selectable().wrap().xalign(0).hexpand()
                     Button("Dismiss") { runtime.message = "" }.valign(.center)
                 }
+                .spacing(12)
                 .frame(maxWidth: 720)
                 .padding(12, [.top, .bottom])
                 .padding(24, [.leading, .trailing])
@@ -91,6 +71,7 @@ struct MonitorView: View {
     @ViewBuilder var overview: Body {
         if let snapshot = runtime.snapshot {
             VStack {
+                periodPicker
                 PreferencesGroup()
                     .title(UsagePeriodSettings.shared.configuration.title(for: runtime.period))
                     .child {
@@ -149,49 +130,91 @@ struct MonitorView: View {
     }
 
     @ViewBuilder var analysis: Body {
-        PreferencesGroup().title("Daily Usage · Last 30 Days").child {
-            NativePreferencesRows(
-                rows: runtime.daily.isEmpty
-                    ? [
-                        NativePreferencesRow(
-                            "empty",
-                            ActionRow().title("No daily history yet")
-                                .subtitle("Daily totals will appear after usage is collected.").useMarkup(false))
-                    ]
-                    : runtime.daily.sorted { $0.day > $1.day }.map { day in
-                        NativePreferencesRow(
-                            day.id,
-                            metric(
-                                Format.dayKeyString(day.day),
-                                Format.compact(
-                                    ToolKind(rawValue: day.tool)?.totalTokens(
-                                        input: day.input, output: day.output, cacheRead: day.cacheRead) ?? day.input),
-                                "\(ToolKind(rawValue: day.tool)?.displayName ?? day.tool) · \(Format.full(day.count)) calls · \(Format.money(day.cost))"
-                            ))
-                    })
-        }
-        Button("Export Daily CSV") {
-            do {
-                let directory = LinuxPaths.dataDirectory().appendingPathComponent("exports", isDirectory: true)
-                try FileManager.default.createDirectory(
-                    at: directory, withIntermediateDirectories: true, attributes: [.posixPermissions: 0o700])
-                let path = directory.appendingPathComponent("usage-\(Int(Date().timeIntervalSince1970)).csv")
-                let content =
-                    "day,tool,input,output,cache_read,api_value_usd,calls\n"
-                    + runtime.daily.map {
-                        "\(Format.dayKeyString($0.day)),\($0.tool),\($0.input),\($0.output),\($0.cacheRead),\($0.cost),\($0.count)"
-                    }.joined(separator: "\n") + "\n"
-                try content.write(to: path, atomically: true, encoding: .utf8)
-                try FileManager.default.setAttributes([.posixPermissions: 0o600], ofItemAtPath: path.path)
-                runtime.message = "Exported to \(path.path)"
-            } catch { runtime.message = "Export failed: \(error.localizedDescription)" }
-        }.halign(.start).insensitive(runtime.daily.isEmpty)
+        VStack {
+            VStack {
+                Text("Daily Usage").style("title-2").halign(.start)
+                Text("Last 30 days · tokens, calls and estimated API value")
+                    .wrap().xalign(0).style("dim-label")
+            }.spacing(6)
+            if runtime.daily.isEmpty {
+                NativePreferencesRows(rows: [
+                    NativePreferencesRow(
+                        "empty",
+                        ActionRow().title("No daily history yet")
+                            .subtitle("Daily totals will appear after usage is collected.").useMarkup(false))
+                ])
+            } else {
+                ForEach(dailyGroups) { group in
+                    PreferencesGroup().title(Format.dayKeyString(group.id)).child {
+                        NativePreferencesRows(rows: group.rows.map(dailyRow))
+                    }
+                }.spacing(24)
+            }
+            Button("Export Daily CSV") {
+                do {
+                    let directory = LinuxPaths.dataDirectory().appendingPathComponent("exports", isDirectory: true)
+                    try FileManager.default.createDirectory(
+                        at: directory, withIntermediateDirectories: true, attributes: [.posixPermissions: 0o700])
+                    let path = directory.appendingPathComponent("usage-\(Int(Date().timeIntervalSince1970)).csv")
+                    let content =
+                        "day,tool,input,output,cache_read,api_value_usd,calls\n"
+                        + runtime.daily.map {
+                            "\(Format.dayKeyString($0.day)),\($0.tool),\($0.input),\($0.output),\($0.cacheRead),\($0.cost),\($0.count)"
+                        }.joined(separator: "\n") + "\n"
+                    try content.write(to: path, atomically: true, encoding: .utf8)
+                    try FileManager.default.setAttributes([.posixPermissions: 0o600], ofItemAtPath: path.path)
+                    runtime.message = "Exported to \(path.path)"
+                } catch { runtime.message = "Export failed: \(error.localizedDescription)" }
+            }.halign(.start).insensitive(runtime.daily.isEmpty)
+        }.spacing(24)
+    }
+
+    private struct DailyGroup: Identifiable {
+        let id: Int64
+        let rows: [Database.DayAgg]
+    }
+
+    private func dailyRow(_ day: Database.DayAgg) -> NativePreferencesRow {
+        let tool = ToolKind(rawValue: day.tool)
+        let tokens = tool?.totalTokens(input: day.input, output: day.output, cacheRead: day.cacheRead) ?? day.input
+        return NativePreferencesRow(
+            day.id,
+            metric(
+                tool?.displayName ?? day.tool, Format.compact(tokens),
+                "\(Format.full(day.count)) calls · \(Format.money(day.cost)) API value"
+            ))
+    }
+
+    private var dailyGroups: [DailyGroup] {
+        Dictionary(grouping: runtime.daily, by: \.day).map { day, rows in
+            DailyGroup(id: day, rows: rows.sorted { $0.tool < $1.tool })
+        }.sorted { $0.id > $1.id }
+    }
+
+    private var periodPicker: AnyView {
+        HStack {
+            Text("Usage period").xalign(0).style("heading").hexpand()
+            Menu(UsagePeriodSettings.shared.configuration.label(for: runtime.period)) {
+                MenuButton("Today") { selectPeriod(.today) }
+                MenuButton("Week / 7 Days") { selectPeriod(.week) }
+                MenuButton("Month / 30 Days") { selectPeriod(.month) }
+                MenuButton("All Time") { selectPeriod(.all) }
+            }.tooltip("Usage period")
+        }.spacing(12)
+    }
+
+    private func selectPeriod(_ period: UsagePeriodSlot) {
+        runtime.period = period
+        runtime.refresh()
     }
 
     @ViewBuilder var plans: Body {
         // The lightweight refresh revision also refreshes these collector states.
         let _ = runtime.revision
-        VStack { planGroups }.spacing(24)
+        VStack {
+            periodPicker
+            planGroups
+        }.spacing(24)
     }
 
     private var planGroups: Body {
@@ -308,7 +331,7 @@ struct MonitorView: View {
     }
 
     @ViewBuilder var sessionList: Body {
-        PreferencesGroup().title("Recent Sessions").description("Newest first · up to 200 sessions").child {
+        PreferencesGroup().title("Recent Sessions").description("Newest first · up to 200 sessions · token totals").child {
             NativePreferencesRows(
                 rows: runtime.sessions.isEmpty
                     ? [
@@ -326,7 +349,7 @@ struct MonitorView: View {
                                     ToolKind(rawValue: session.tool)?.totalTokens(
                                         input: session.input, output: session.output, cacheRead: session.cacheRead)
                                         ?? session.input),
-                                "\(ToolKind(rawValue: session.tool)?.displayName ?? session.tool) · \(session.project ?? "No project") · \(session.updated > 0 ? Format.dateTime(session.updated) : "—") · \(Format.money(session.cost))"
+                                "\(ToolKind(rawValue: session.tool)?.displayName ?? session.tool) · \(session.updated > 0 ? Format.dateTime(session.updated) : "—") · \(Format.money(session.cost)) API value\n\(session.project ?? "No project")"
                             ))
                     })
         }

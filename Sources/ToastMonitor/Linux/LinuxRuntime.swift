@@ -2,10 +2,25 @@ import Adwaita
 import Foundation
 import LinuxBridge
 
-enum MonitorPage: String, CaseIterable, Identifiable, CustomStringConvertible {
-    case overview = "Overview", analysis = "Analysis", plans = "Plans", sessions = "Sessions", preferences = "Preferences"
+enum MonitorPage: String, CaseIterable, Identifiable, CustomStringConvertible, ViewSwitcherOption {
+    case overview = "Overview"
+    case analysis = "Analysis"
+    case plans = "Plans"
+    case sessions = "Sessions"
+    case preferences = "Preferences"
     var id: Self { self }
     var description: String { rawValue }
+    var title: String { rawValue }
+    var icon: Icon {
+        switch self {
+        case .overview: return .default(icon: .viewGrid)
+        case .analysis: return .default(icon: .viewList)
+        case .plans: return .default(icon: .accessoriesCalculator)
+        case .sessions: return .default(icon: .documentOpenRecent)
+        case .preferences: return .default(icon: .preferencesSystem)
+        }
+    }
+    init?(title: String) { self.init(rawValue: title) }
 }
 
 @MainActor

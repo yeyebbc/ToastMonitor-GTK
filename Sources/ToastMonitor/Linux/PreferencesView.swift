@@ -96,13 +96,12 @@ struct PreferencesView: View {
                             ? "OpenRouter connected" : "Could not save key. Check the key and unlock GNOME Keyring."
                         routerKey = ""
                     }.suggested().insensitive(routerKey.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
-                        .padding(12, [.trailing])
                     Button("Disconnect") {
                         runtime.message =
                             OpenRouterClient.shared.setKey(nil)
                             ? "OpenRouter disconnected" : "Could not remove key. Unlock GNOME Keyring."
                     }
-                }.halign(.start)
+                }.spacing(12).halign(.start)
             }.spacing(12)
             VStack {
                 PreferencesGroup().title("OpenCode Go").child {
@@ -118,12 +117,12 @@ struct PreferencesView: View {
                     }.suggested().insensitive(
                         goWorkspace.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
                             || goCookie.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
-                    ).padding(12, [.trailing])
+                    )
                     Button("Disconnect") {
                         OpenCodeGoClient.shared.clear()
                         runtime.message = "OpenCode Go credentials removal requested"
                     }
-                }.halign(.start)
+                }.spacing(12).halign(.start)
             }.spacing(12)
             VStack {
                 PreferencesGroup().title("Command Code").child {
@@ -137,12 +136,11 @@ struct PreferencesView: View {
                             : "Could not save cookie. Unlock GNOME Keyring and check the value."
                         commandCookie = ""
                     }.suggested().insensitive(commandCookie.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
-                        .padding(12, [.trailing])
                     Button("Disconnect") {
                         CommandCodeQuotaClient.shared.clear()
                         runtime.message = "Command Code credentials removal requested"
                     }
-                }.halign(.start)
+                }.spacing(12).halign(.start)
             }.spacing(12)
             VStack {
                 PreferencesGroup().title("DeepSeek").description(
@@ -156,9 +154,8 @@ struct PreferencesView: View {
                         deepSeekToken = ""
                         runtime.message = "Checking DeepSeek credentials…"
                     }.suggested().insensitive(deepSeekToken.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
-                        .padding(12, [.trailing])
                     Button("Disconnect") { DeepSeekBillingClient.shared.disconnect() }
-                }.halign(.start)
+                }.spacing(12).halign(.start)
             }.spacing(12)
             VStack {
                 PreferencesGroup().title("Fixed Subscriptions").child {
