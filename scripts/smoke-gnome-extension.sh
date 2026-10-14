@@ -4,6 +4,9 @@ cd "$(dirname "$0")/.."
 if [[ "${1:-}" != --session ]]; then
   exec dbus-run-session --config-file scripts/smoke-linux-bus.conf -- bash "$0" --session
 fi
+# Shell needs a system-bus connection even without a real login session. Reuse
+# this private bus so containers work and tests never contact host services.
+export DBUS_SYSTEM_BUS_ADDRESS="$DBUS_SESSION_BUS_ADDRESS"
 smoke_dir=$(mktemp -d)
 shell_pid='' app_pid=''
 cleanup() {

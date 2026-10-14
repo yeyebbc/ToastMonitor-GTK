@@ -23,6 +23,6 @@ docs/AUDIT-*.md
 
 # External tool output & unrelated local work — never commit
 graphify-out/
-.impeccable/review/
+.impeccable/
 *.docx
 translate_kilishop_doc.py
