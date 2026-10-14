@@ -6,6 +6,8 @@ typedef void (*TMTick)(void);
 int tm_tray_start(TMAction action, TMTick tick);
 void tm_tray_update(const char *label, const char *tooltip);
 void tm_tray_stop(void);
+// Panel actions additionally support 5 analysis, 6 plans, 7 expanded, 8 collapsed.
+void tm_panel_update(const char *snapshot_json);
 void tm_window_hide(void *window);
 void *tm_main_window(void);
 void tm_window_keep_alive(void *window);

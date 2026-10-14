@@ -15,6 +15,11 @@ install -Dm755 "$binary_dir/ToastMonitor" dist/linux/bin/ToastMonitor
 install -Dm644 data/io.github.yeyebbc.ToastMonitor.desktop dist/linux/share/applications/io.github.yeyebbc.ToastMonitor.desktop
 install -Dm644 artifacts/ToastMonitor-Icon/ToastMonitor-1024.png dist/linux/share/icons/hicolor/512x512/apps/io.github.yeyebbc.ToastMonitor.png
 install -Dm644 data/icons/hicolor/scalable/status/toastmonitor-token-symbolic.svg dist/linux/share/icons/hicolor/scalable/status/toastmonitor-token-symbolic.svg
+extension_dir=dist/linux/share/gnome-shell/extensions/toastmonitor@yeyebbc.github.io
+mkdir -p "$extension_dir"
+for source in gnome-extension/toastmonitor@yeyebbc.github.io/*; do
+  install -m644 "$source" "$extension_dir/"
+done
 # Swift executables use toolchain runtime libraries on Linux. Ship those for
 # machines which have the GNOME libraries but no Swift development toolchain.
 ldd "$binary_dir/ToastMonitor" | while read -r name arrow path rest; do

@@ -7,9 +7,9 @@ name: Linux CI and packaging
   workflow_dispatch:
     inputs:
       version:
-        description: Package version (for example, 1.0.2)
+        description: Package version (for example, 1.0.3)
         required: true
-        default: "1.0.2"
+        default: "1.0.3"
         type: string
 permissions:
   contents: read
@@ -22,7 +22,7 @@ jobs:
     container: swift:6.0.3-noble
     timeout-minutes: 45
     env:
-      TM_VERSION: ${{ inputs.version || '1.0.2' }}
+      TM_VERSION: ${{ inputs.version || '1.0.3' }}
       TM_DEB_REVISION: ${{ github.run_number }}
       SWIFT_JOBS: "4"
     steps:
@@ -30,15 +30,19 @@ jobs:
       - name: Install GNOME dependencies
         run: |
           apt-get update
-          apt-get install -y libgtk-4-dev libadwaita-1-dev libsqlite3-dev libsecret-1-dev libssl-dev libcurl4-openssl-dev zstd xvfb dbus-x11 python3 dpkg-dev desktop-file-utils
+          apt-get install -y libgtk-4-dev libadwaita-1-dev libsqlite3-dev libsecret-1-dev libssl-dev libcurl4-openssl-dev zstd xvfb dbus-x11 python3 python3-gi dpkg-dev desktop-file-utils gnome-shell
       - name: Build
         run: swift build -j 4
       - name: Test
         run: swift test -j 4
       - name: Tray integration smoke
         run: ./scripts/smoke-linux.sh
+      - name: GNOME Shell extension integration smoke
+        run: ./scripts/smoke-gnome-extension.sh
       - name: Compile and package release
         run: ./scripts/package-deb.sh
+      - name: Package GNOME Shell extension
+        run: ./scripts/package-extension.sh
       - name: Verify Debian package
         shell: bash
         run: |
@@ -46,6 +50,9 @@ jobs:
           package_root="$RUNNER_TEMP/toastmonitor-deb"
           dpkg-deb --info dist/release/*.deb
           dpkg-deb --extract dist/release/*.deb "$package_root"
+          test -s "$package_root/usr/share/gnome-shell/extensions/toastmonitor@yeyebbc.github.io/extension.js"
+          test -s "$package_root/usr/share/gnome-shell/extensions/toastmonitor@yeyebbc.github.io/metadata.json"
+          test -s "$package_root/usr/share/gnome-shell/extensions/toastmonitor@yeyebbc.github.io/toastmonitor-token-symbolic.svg"
           desktop-file-validate "$package_root/usr/share/applications/io.github.yeyebbc.ToastMonitor.desktop"
           (cd dist/release && sha256sum -c *.deb.sha256)
           export LD_LIBRARY_PATH="$package_root/usr/lib/toastmonitor"
@@ -59,5 +66,7 @@ jobs:
           path: |
             dist/release/*.deb
             dist/release/*.deb.sha256
+            dist/release/*.shell-extension.zip
+            dist/release/*.shell-extension.zip.sha256
           if-no-files-found: error
           retention-days: 30

@@ -43,6 +43,9 @@ final class LinuxRuntime {
     private var extraPeriod: UsagePeriodSlot = .today
     private var captured = false
     private var startTime = Date()
+    private var panelExpanded = false
+    private var lastPanelPublish = Date.distantPast
+    private var lastExplicitRefresh = Date.distantPast
 
     func start(app: AdwaitaApp) {
         if DebugLog.enabled { NSLog("[ToastMonitor] runtime starting") }
@@ -90,7 +93,24 @@ final class LinuxRuntime {
             }
             if visible { lastRefresh = .distantPast }
         }
-        if Date().timeIntervalSince(lastRefresh) >= TMRefreshPolicy.snapshotInterval(foreground: visible) { refresh() }
+        if Date().timeIntervalSince(lastPanelPublish) >= 1 { publishPanel() }
+        if Date().timeIntervalSince(lastRefresh) >= TMRefreshPolicy.snapshotInterval(foreground: visible || panelExpanded) { refresh() }
+    }
+
+    private func publishPanel() {
+        lastPanelPublish = Date()
+        var panel = PanelSnapshot.usage(snapshot)
+        panel.addAccounts()
+        if let json = panel.json() { tm_panel_update(json) }
+    }
+
+    private func setPanelExpanded(_ expanded: Bool) {
+        guard panelExpanded != expanded else { return }
+        panelExpanded = expanded
+        if ProcessInfo.processInfo.environment["TM_TEST_MODE"] != "1" {
+            NotificationCenter.default.post(name: TMNotifications.popoverVisibility, object: expanded)
+        }
+        if expanded { lastRefresh = .distantPast }
     }
 
     func refresh() {
@@ -102,6 +122,7 @@ final class LinuxRuntime {
             self.snapshot = snap
             self.inFlight = false
             self.revision += 1
+            self.publishPanel()
             tm_tray_update(Format.compact(snap.todayTokens), "Today: \(Format.full(snap.todayTokens)) tokens · \(Format.money(snap.apiValueToday)) API value")
         }
         if visible {
@@ -125,6 +146,9 @@ final class LinuxRuntime {
     }
 
     func refreshNow() {
+        guard Date().timeIntervalSince(lastExplicitRefresh) >= 5 else { return }
+        lastExplicitRefresh = Date()
+        if ProcessInfo.processInfo.environment["TM_TEST_MODE"] == "1" { refresh(); return }
         CollectorEngine.shared.scheduleScan(force: true) { [weak self] receipt in
             self?.message = receipt.failedSources.isEmpty ? "Collection complete" : "Retrying: " + receipt.failedSources.joined(separator: ", ")
             self?.refresh()
@@ -156,6 +180,10 @@ final class LinuxRuntime {
         case 2: show(.preferences)
         case 3: refreshNow()
         case 4: quit()
+        case 5: show(.analysis)
+        case 6: show(.plans)
+        case 7: setPanelExpanded(true)
+        case 8: setPanelExpanded(false)
         default: break
         }
     }

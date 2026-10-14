@@ -49,7 +49,9 @@ swift test
 swift run ToastMonitor
 ```
 
-GNOME Shell does not display legacy tray icons by default. Install and enable [AppIndicator and KStatusNotifierItem Support](https://extensions.gnome.org/extension/615/appindicator-support/), e.g. `sudo apt-get install gnome-shell-extension-appindicator` on Ubuntu. The tray uses **StatusNotifierItem and DBusMenu over the session bus**, works on Wayland, and re-registers after a shell/extension restart. Other desktops with StatusNotifier support also work. Some hosts display only the icon; the total remains in its tooltip and menu. The application window remains accessible without a tray extension.
+On **GNOME Shell 46**, the bundled **ToastMonitor extension** opens a native popup from the top bar, showing today's usage, costs, balances and quotas. Enable `toastmonitor@yeyebbc.github.io` after installation; see [installation and panel details](docs/gnome-extension.md). The extension uses the application's session-bus interface and hides the fallback tray while connected. Installing it does not enable login autostart.
+
+For the ordinary tray menu, install and enable [AppIndicator and KStatusNotifierItem Support](https://extensions.gnome.org/extension/615/appindicator-support/), e.g. `sudo apt-get install gnome-shell-extension-appindicator` on Ubuntu. This fallback uses **StatusNotifierItem and DBusMenu over the session bus**, works on Wayland, and re-registers after a shell/extension restart. Other desktops with StatusNotifier support also work. Some hosts display only the icon; the total remains in its tooltip and menu. The application window remains accessible without either extension.
 
 The tray uses the bundled `toastmonitor-token-symbolic` SVG: a filled circle with a transparent five-point star cutout. GNOME controls its foreground color through the symbolic icon theme. The app publishes its icon directory via `IconThemePath`, so this also works when running directly from an extracted archive. The [freedesktop icon naming specification](https://specifications.freedesktop.org/icon-naming/latest/) does not define a standard token icon.
 
@@ -64,9 +66,10 @@ A running, unlocked Secret Service is needed to save account credentials. Local 
 ToastMonitor --background             # start hidden in the tray
 ./scripts/package-release.sh          # Linux archive for the current architecture
 ./scripts/package-deb.sh              # Debian/Ubuntu package → dist/release/
+./scripts/package-extension.sh        # optional GNOME Shell 46 extension ZIP
 ```
 
-Building a `.deb` also requires `dpkg-dev` (for `dpkg-shlibdeps` and `dpkg-architecture`). The package bundles the Swift runtimes, declares system-library dependencies, and installs under `/usr`. Install it with `sudo apt install ./dist/release/toastmonitor_1.0.2-1_amd64.deb` (adjust the filename for your version and architecture). `TM_VERSION` and `TM_DEB_REVISION` set the package version; `TM_DEB_MAINTAINER` optionally sets its maintainer field. Installation does not enable login autostart.
+Building a `.deb` also requires `dpkg-dev` (for `dpkg-shlibdeps` and `dpkg-architecture`). The package bundles the Swift runtimes, declares system-library dependencies, and installs under `/usr`. Install it with `sudo apt install ./dist/release/toastmonitor_1.0.3-1_amd64.deb` (adjust the filename for your version and architecture). `TM_VERSION` and `TM_DEB_REVISION` set the package version; `TM_DEB_MAINTAINER` optionally sets its maintainer field. Installation does not enable login autostart.
 
 GitHub Actions compiles, tests and packages the application on pushes to `main`, pull requests, and manual runs. Download the `.deb` and SHA-256 checksum from the run's `toastmonitor-linux-amd64-<commit>` artifact, retained for 30 days. CI uses the run number as the Debian revision; manual runs can set the package version. Both the debug application and the extracted release package undergo the isolated tray integration check. No package is installed or release published by this workflow.
 

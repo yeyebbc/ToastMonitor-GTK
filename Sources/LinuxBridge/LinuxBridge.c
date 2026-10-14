@@ -78,6 +78,90 @@ static TMTick tick_callback;
 static char *current_label, *current_tooltip;
 static const char *tray_icon_name = "toastmonitor-token-symbolic";
 static char *tray_icon_theme_path;
+static GDBusNodeInfo *panel_info;
+static guint panel_id, panel_owner_watch;
+static char *panel_snapshot, *panel_owner;
+
+static const char *panel_xml =
+"<node><interface name='io.github.yeyebbc.ToastMonitor.Panel'>"
+"<property name='Snapshot' type='s' access='read'/>"
+"<method name='Open'><arg name='page' type='s' direction='in'/></method>"
+"<method name='Refresh'/>"
+"<method name='SetPanelActive'><arg name='active' type='b' direction='in'/></method>"
+"<method name='SetExpanded'><arg name='expanded' type='b' direction='in'/></method>"
+"<signal name='SnapshotChanged'><arg name='snapshot' type='s'/></signal>"
+"</interface></node>";
+
+static void panel_status_changed(void) {
+    if (bus && item_id)
+        g_dbus_connection_emit_signal(bus, NULL, "/StatusNotifierItem", "org.kde.StatusNotifierItem", "NewStatus",
+                                      g_variant_new("(s)", panel_owner ? "Passive" : "Active"), NULL);
+}
+static void panel_release(void) {
+    if (panel_owner_watch) g_bus_unwatch_name(panel_owner_watch);
+    panel_owner_watch = 0;
+    g_clear_pointer(&panel_owner, g_free);
+    if (action_callback) action_callback(8);
+    panel_status_changed();
+}
+static void panel_owner_vanished(GDBusConnection *connection, const char *name, void *data) {
+    panel_release();
+}
+static void panel_method(GDBusConnection *connection, const char *sender, const char *path,
+                         const char *interface, const char *method, GVariant *parameters,
+                         GDBusMethodInvocation *invocation, void *data) {
+    if (!strcmp(method, "Open")) {
+        const char *page;
+        g_variant_get(parameters, "(&s)", &page);
+        const char *pages[] = {"Overview", "Sessions", "Preferences", "", "", "Analysis", "Plans"};
+        int action = -1;
+        for (gsize i = 0; i < G_N_ELEMENTS(pages); i++)
+            if (*pages[i] && !strcmp(page, pages[i])) { action = (int)i; break; }
+        if (action < 0) {
+            g_dbus_method_invocation_return_error_literal(invocation, G_DBUS_ERROR, G_DBUS_ERROR_INVALID_ARGS, "Unknown page");
+            return;
+        }
+        if (action_callback) action_callback(action);
+    } else if (!strcmp(method, "Refresh")) {
+        if (action_callback) action_callback(3);
+    } else if (!strcmp(method, "SetPanelActive")) {
+        gboolean active;
+        g_variant_get(parameters, "(b)", &active);
+        if (active && g_strcmp0(panel_owner, sender)) {
+            panel_release();
+            panel_owner = g_strdup(sender);
+            panel_owner_watch = g_bus_watch_name_on_connection(bus, sender, G_BUS_NAME_WATCHER_FLAGS_NONE,
+                                                              NULL, panel_owner_vanished, NULL, NULL);
+            panel_status_changed();
+        } else if (!active && !g_strcmp0(panel_owner, sender)) {
+            panel_release();
+        }
+    } else if (!strcmp(method, "SetExpanded")) {
+        gboolean expanded;
+        g_variant_get(parameters, "(b)", &expanded);
+        if (!g_strcmp0(panel_owner, sender) && action_callback) action_callback(expanded ? 7 : 8);
+    }
+    g_dbus_method_invocation_return_value(invocation, NULL);
+}
+static GVariant *panel_property(GDBusConnection *connection, const char *sender, const char *path,
+                                const char *interface, const char *property, GError **error, void *data) {
+    return g_variant_new_string(panel_snapshot ? panel_snapshot : "{\"version\":1,\"ready\":false}");
+}
+static const GDBusInterfaceVTable panel_vtable = {panel_method, panel_property, NULL};
+
+void tm_panel_update(const char *snapshot_json) {
+    if (!g_strcmp0(panel_snapshot, snapshot_json)) return;
+    g_free(panel_snapshot);
+    panel_snapshot = g_strdup(snapshot_json);
+    if (!bus || !panel_id) return;
+    g_dbus_connection_emit_signal(bus, NULL, "/io/github/yeyebbc/ToastMonitor/Panel", "io.github.yeyebbc.ToastMonitor.Panel",
+                                  "SnapshotChanged", g_variant_new("(s)", snapshot_json), NULL);
+    GVariantBuilder changed;
+    g_variant_builder_init(&changed, G_VARIANT_TYPE("a{sv}"));
+    g_variant_builder_add(&changed, "{sv}", "Snapshot", g_variant_new_string(snapshot_json));
+    g_dbus_connection_emit_signal(bus, NULL, "/io/github/yeyebbc/ToastMonitor/Panel", "org.freedesktop.DBus.Properties",
+                                  "PropertiesChanged", g_variant_new("(sa{sv}as)", "io.github.yeyebbc.ToastMonitor.Panel", &changed, NULL), NULL);
+}
 
 static char *find_tray_icon_path(void) {
     // Resolve from the executable, so archives work without installation and
@@ -122,6 +206,7 @@ static const char *item_xml =
 "<property name='Menu' type='o' access='read'/><property name='XAyatanaLabel' type='s' access='read'/>"
 "<property name='XAyatanaLabelGuide' type='s' access='read'/>"
 "<signal name='NewTitle'/><signal name='NewToolTip'/><signal name='NewIcon'/>"
+"<signal name='NewStatus'><arg type='s'/></signal>"
 "<signal name='XAyatanaNewLabel'><arg type='s'/><arg type='s'/></signal>"
 "</interface></node>";
 static const char *menu_xml =
@@ -193,7 +278,7 @@ static GVariant *item_property(GDBusConnection *connection, const char *sender, 
     if (!strcmp(property, "Category")) return g_variant_new_string("ApplicationStatus");
     if (!strcmp(property, "Id")) return g_variant_new_string("ToastMonitor");
     if (!strcmp(property, "Title")) return g_variant_new_string(current_label ? current_label : "ToastMonitor");
-    if (!strcmp(property, "Status")) return g_variant_new_string("Active");
+    if (!strcmp(property, "Status")) return g_variant_new_string(panel_owner ? "Passive" : "Active");
     if (!strcmp(property, "WindowId")) return g_variant_new_int32(0);
     if (!strcmp(property, "IconName")) return g_variant_new_string(tray_icon_name);
     if (!strcmp(property, "IconThemePath")) return g_variant_new_string(tray_icon_theme_path ? tray_icon_theme_path : "");
@@ -289,6 +374,10 @@ int tm_tray_start(TMAction action, TMTick tick_fn) {
     item_id = g_dbus_connection_register_object(bus, "/StatusNotifierItem", item_info->interfaces[0], &item_vtable, NULL, NULL, &error);
     menu_id = g_dbus_connection_register_object(bus, "/MenuBar", menu_info->interfaces[0], &menu_vtable, NULL, NULL, &error);
     g_clear_error(&error);
+    panel_info = g_dbus_node_info_new_for_xml(panel_xml, NULL);
+    if (panel_info)
+        panel_id = g_dbus_connection_register_object(bus, "/io/github/yeyebbc/ToastMonitor/Panel", panel_info->interfaces[0],
+                                                     &panel_vtable, NULL, NULL, NULL);
     char *name = g_strdup_printf("org.kde.StatusNotifierItem-%d-1", getpid());
     name_id = g_bus_own_name_on_connection(bus, name, G_BUS_NAME_OWNER_FLAGS_NONE, NULL, NULL, NULL, NULL);
     g_free(name);
@@ -309,11 +398,16 @@ void tm_tray_update(const char *label, const char *tooltip) {
     g_dbus_connection_emit_signal(bus, NULL, "/MenuBar", "com.canonical.dbusmenu", "LayoutUpdated", g_variant_new("(ui)", menu_revision, 0), NULL);
 }
 void tm_tray_stop(void) {
+    panel_release();
     if (tick_id) g_source_remove(tick_id);
     if (watch_id) g_bus_unwatch_name(watch_id);
     if (name_id) g_bus_unown_name(name_id);
     if (bus && item_id) g_dbus_connection_unregister_object(bus, item_id);
     if (bus && menu_id) g_dbus_connection_unregister_object(bus, menu_id);
+    if (bus && panel_id) g_dbus_connection_unregister_object(bus, panel_id);
+    g_clear_pointer(&panel_info, g_dbus_node_info_unref);
+    g_clear_pointer(&panel_snapshot, g_free);
+    panel_id = 0;
     g_clear_pointer(&item_info, g_dbus_node_info_unref);
     g_clear_pointer(&menu_info, g_dbus_node_info_unref);
     g_clear_object(&bus);

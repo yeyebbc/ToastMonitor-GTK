@@ -1,0 +1,17 @@
+/* Colors and the outer popover come from the active GNOME Shell theme. */
+.toastmonitor-popup { spacing: 12px; padding: 8px 16px; }
+.toastmonitor-header { spacing: 12px; }
+.toastmonitor-title { font-size: 1.15em; font-weight: bold; }
+.toastmonitor-icon-button { padding: 8px; border-radius: 99px; }
+.toastmonitor-content { spacing: 24px; padding: 4px 4px 8px 0; }
+.toastmonitor-section { spacing: 12px; }
+.toastmonitor-heading, .toastmonitor-value { font-weight: bold; }
+.toastmonitor-muted { color: inherit; font-size: 0.9em; }
+.toastmonitor-note { padding-top: 4px; }
+.toastmonitor-metric { spacing: 16px; }
+.toastmonitor-rows { spacing: 16px; }
+.toastmonitor-data-row { spacing: 6px; }
+.toastmonitor-actions { spacing: 12px; }
+.toastmonitor-button { padding: 10px 12px; }
+.toastmonitor-quota-track { height: 4px; border-radius: 2px; background-color: rgba(127, 127, 127, 0.35); }
+.toastmonitor-quota-fill { height: 4px; border-radius: 2px; background-color: #3584e4; }

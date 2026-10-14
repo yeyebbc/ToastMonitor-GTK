@@ -63,6 +63,7 @@ for attempt in {1..100}; do
 done
 grep -q "<'0'>" "$smoke_dir/title"
 test -s "$smoke_dir/window.png"
+/usr/bin/python3 scripts/test-panel-client.py
 gdbus call --session --dest "$destination" --object-path /MenuBar \
   --method com.canonical.dbusmenu.Event 6 clicked '<0>' 0 >/dev/null
 for attempt in {1..100}; do
