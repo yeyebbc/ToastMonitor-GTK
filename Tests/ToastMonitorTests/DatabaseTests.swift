@@ -23,6 +23,23 @@ final class DatabaseTests: XCTestCase {
         super.tearDown()
     }
 
+    func testModelGroupingAppliesCacheSemanticsBeforeCombiningTools() {
+        let now = Int64(Date().timeIntervalSince1970)
+        let turns = [ToolKind.codex, .claude].map { tool in
+            TurnRecord(tool: tool, sessionID: "model-token-\(tool.rawValue)", project: nil,
+                       model: "shared-model", ts: now, inputTokens: 1_000, outputTokens: 100,
+                       cacheRead: 500, cacheWrite: 0, cost: 2)
+        }
+        XCTAssertTrue(db.insertTurns(turns))
+        let rows = db.dailyPrimaryTokensByModel(days: 1)
+        XCTAssertEqual(rows.count, 1)
+        XCTAssertEqual(rows.first?.tokens, 2_700, "Codex contributes 1,100; Claude contributes 1,600")
+        XCTAssertEqual(rows.first?.count, 2)
+        XCTAssertEqual(rows.first?.cost, 4)
+        XCTAssertEqual(db.dailyAggregatesByModel(days: 1).first?.cacheRead, 1_000,
+                       "The existing raw aggregate API keeps its original semantics")
+    }
+
     func testTokenMetricIncludesCacheReadExceptCodex() {
         XCTAssertEqual(ToolKind.claude.totalTokens(input: 100, output: 20, cacheRead: 1_000), 1_120)
         XCTAssertEqual(ToolKind.codex.totalTokens(input: 100, output: 20, cacheRead: 1_000), 120)

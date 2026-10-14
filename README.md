@@ -16,15 +16,15 @@ Collects **Claude Code, Codex, OpenCode, Hermes, Oh My Pi and DeepSeek Harness**
 
 | Area | GNOME port |
 |---|---|
-| Interface | Native GTK4/libadwaita overview, analysis, plans, sessions and preferences replace the macOS SwiftUI interface. |
+| Interface | Two native GTK4/libadwaita windows follow the macOS layouts: Dashboard (Overview, Analysis, Plans, Sessions) and Settings (General, Appearance, Sources, Accounts, Data). |
 | Tray | StatusNotifierItem and DBusMenu replace the macOS menu-bar integration. Closing a window hides it while collection continues; Quit stops the app. |
-| Appearance | GNOME sets fonts and light/dark appearance. A symbolic token icon follows the tray host's foreground color. |
+| Appearance | GNOME sets fonts. Settings offers System, Light and Dark appearance plus popup display options. A symbolic token icon follows the tray host's foreground color. |
 | Credentials | GNOME Secret Service replaces macOS Keychain. Existing Claude Code and Codex CLI login files are still used. |
 | Storage | XDG data directories replace macOS Application Support. SQLite migrations, backups, restore validation and exports are retained. |
 | Swift dependencies | OpenCombine and swift-crypto provide Linux-compatible equivalents for Combine and CryptoKit. SQLite, GIO and libsecret use system libraries. |
 | Distribution | Linux release archives, desktop entries, optional login autostart and a user-local installer replace macOS app bundles and the built-in updater. |
 
-This is a platform adaptation rather than complete UI feature parity. The macOS font picker, browser-based DeepSeek login automation and updater are not available in the Linux build. DeepSeek credentials can be entered in Preferences. Historical macOS sources remain in the repository but are excluded from the Linux target.
+This is a platform adaptation rather than complete UI feature parity. The macOS font picker, browser-based DeepSeek login automation and updater are not available in the Linux build. DeepSeek credentials can be entered in Settings → Accounts. Historical macOS sources remain in the repository but are excluded from the Linux target.
 
 ## Requirements
 

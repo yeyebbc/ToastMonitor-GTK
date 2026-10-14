@@ -1894,6 +1894,38 @@ final class Database: @unchecked Sendable {
         return out
     }
 
+    struct DailyModelTokens: Sendable {
+        let day: Int64
+        let model: String
+        let tokens: Int64
+        let cost: Double
+        let count: Int64
+    }
+
+    /// Apply each tool's cache semantics before combining models across tools.
+    func dailyPrimaryTokensByModel(days: Int) -> [DailyModelTokens] {
+        lock.lock(); defer { lock.unlock() }
+        guard let db else { return [] }
+        var statement: OpaquePointer?
+        let sql = """
+        SELECT CAST(strftime('%Y%m%d', bucket, 'unixepoch', 'localtime') AS INTEGER) AS day,
+               COALESCE(NULLIF(model, ''), '(unknown)') AS model,
+               SUM(input_tokens + output_tokens + CASE WHEN tool='codex' THEN 0 ELSE cache_read END),
+               SUM(cost), SUM(n)
+        FROM (\(Self.usageSource)) GROUP BY day, model ORDER BY day;
+        """
+        guard sqlite3_prepare_v2(db, sql, -1, &statement, nil) == SQLITE_OK else { return [] }
+        defer { sqlite3_finalize(statement) }
+        bindUsageRange(statement, from: startOfDay(daysAgo: max(days - 1, 0)), to: .max)
+        var result: [DailyModelTokens] = []
+        while sqlite3_step(statement) == SQLITE_ROW {
+            result.append(.init(day: sqlite3_column_int64(statement, 0), model: String(cString: sqlite3_column_text(statement, 1)),
+                                tokens: sqlite3_column_int64(statement, 2), cost: sqlite3_column_double(statement, 3),
+                                count: sqlite3_column_int64(statement, 4)))
+        }
+        return result
+    }
+
     /// Cost breakdown by quality (spec §5.2): estimated vs actual variable
     /// spend. Hermes is excluded because its traffic is billed inside
     /// OCG/OpenRouter/Codex plans.

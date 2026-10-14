@@ -24,7 +24,7 @@ def install_extension(source, data_home):
         raise RuntimeError('The user panel directory is a symbolic link; leaving it unchanged.')
     target.mkdir(parents=True, exist_ok=True)
     # Install metadata last so a new directory is not discovered half-written.
-    for name in ('extension.js', 'stylesheet.css', 'toastmonitor-token-symbolic.svg', 'metadata.json'):
+    for name in ('extension.js', 'stylesheet.css', 'toastmonitor-token-symbolic.svg', 'toastmonitor-chart-symbolic.svg', 'metadata.json'):
         content = (source / name).read_bytes()
         destination = target / name
         if destination.is_file() and destination.read_bytes() == content:

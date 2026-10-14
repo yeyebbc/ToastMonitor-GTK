@@ -187,6 +187,13 @@ final class UsageQueryService: @unchecked Sendable {
             DispatchQueue.main.async { completion(aggs) }
         }
     }
+    func loadDailyPrimaryTokensByModel(days: Int, completion: @escaping @MainActor @Sendable ([Database.DailyModelTokens]) -> Void) {
+        queue.async {
+            let rows = self.database.dailyPrimaryTokensByModel(days: days)
+            DispatchQueue.main.async { completion(rows) }
+        }
+    }
+
     private func cacheKey(configuration: UsagePeriodConfiguration, now: Date) -> String {
         "\(database.dataVersionKey())|\(configuration.cacheKey(now: now))"
     }

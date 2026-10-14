@@ -96,6 +96,18 @@ try:
                        (tool, session, 'gpt-5.4' if tool == 'codex' else 'claude-opus-4-6', now, 1234567 + index * 100000, 54321, 500000, 2.34, 'estimated', session))
     wait_for("JSON.parse(e._raw).sources.length === 3")
     capture('usage-dark')
+    # All four popup periods use their own totals, not a renamed Today snapshot.
+    for period in ['week', 'month', 'all', 'today']:
+        evaluate(f'e._periodButtons.get("{period}").emit("clicked",1);return true;')
+        assert evaluate('return e._tokens.text;') == evaluate('return e._data.periods.find(p=>p.id===e._period).tokens;')
+    # Opening Settings preserves a separate Dashboard window and its navigation.
+    evaluate('e._open("Preferences");return true;')
+    wait_for('global.get_window_actors().some(a=>a.meta_window.get_title()==="ToastMonitor Settings")')
+    evaluate('e._open("Analysis");return true;')
+    wait_for('global.get_window_actors().some(a=>a.meta_window.get_title()==="ToastMonitor Dashboard")')
+    assert evaluate('return global.get_window_actors().filter(a=>a.meta_window.get_title().startsWith("ToastMonitor ")).length;') == 2
+    # Hide both native windows so subsequent popup captures are unambiguous.
+    evaluate('for(const a of global.get_window_actors()) if(a.meta_window.get_title().startsWith("ToastMonitor ")) a.meta_window.delete(global.get_current_time());e._indicator.menu.open();return true;')
     # Real keyboard input on the private compositor: Escape, then Enter on the indicator.
     evaluate("const Clutter=(await import('gi://Clutter')).default;globalThis.tmKeyboard=Clutter.get_default_backend().get_default_seat().create_virtual_device(Clutter.InputDeviceType.KEYBOARD_DEVICE);"
              "tmKeyboard.notify_keyval(0,Clutter.KEY_Escape,Clutter.KeyState.PRESSED);tmKeyboard.notify_keyval(0,Clutter.KEY_Escape,Clutter.KeyState.RELEASED);return true;")
@@ -107,8 +119,23 @@ try:
     wait_for('!e._indicator.menu.isOpen')
     # Exercise the actual panel button callback and error-safe teardown.
     evaluate('e._indicator.menu.open(); e._refresh.emit("clicked",1);return true;')
+    wait_for('Boolean(e._refreshTimeout) && e._notice.visible')
+    # Live snapshots during the cooldown must preserve refresh feedback.
+    evaluate("const d=JSON.parse(e._raw);d.updatedAt++;e._proxy.set_cached_property('Snapshot',new GLib.Variant('s',JSON.stringify(d)));e._read();return true;")
+    assert evaluate("return e._notice.visible && e._notice.text.startsWith('Refreshing');")
     capture('refreshing')
     evaluate('e._refresh.emit("clicked",1);return true;')
+    wait_for('!e._refreshTimeout')
+    assert evaluate('return !e._notice.visible;')
+    # An actionable failure survives both the cooldown and subsequent snapshots.
+    evaluate("const call=e._call;e._call=(_method,_parameters,done)=>done(new Error('Synthetic refresh failure'));e._refreshNow();e._call=call;return true;")
+    wait_for('!e._refreshTimeout')
+    evaluate("const d=JSON.parse(e._raw);d.updatedAt++;e._proxy.set_cached_property('Snapshot',new GLib.Variant('s',JSON.stringify(d)));e._read();return true;")
+    assert evaluate("return e._notice.visible && e._notice.text.startsWith('Refresh failed');")
+    capture('refresh-failed')
+    evaluate('e._refreshNow();return true;')
+    wait_for('!e._refreshTimeout')
+    assert evaluate('return !e._notice.visible;')
     # Long, stale, missing and quota values are synthetic presentation fixtures.
     fixture = evaluate('return JSON.parse(e._raw);')
     fixture['accounts'] = [
@@ -150,6 +177,9 @@ try:
                                stdout=(root / 'restarted-app.log').open('w'), stderr=subprocess.STDOUT)
     wait_for('e._claimedOwner && e._raw && JSON.parse(e._raw).ready')
     assert status() == 'Passive'
+    evaluate('e._quitButton.emit("clicked",1);return true;')
+    process.wait(timeout=10)
+    wait_for('!e._proxy.g_name_owner')
     evaluate('e.disable(); return true;')
     print('Extension enabled, claimed tray, rendered data/themes/quotas, handled keyboard/click-away, and recovered across app restart.')
 finally:

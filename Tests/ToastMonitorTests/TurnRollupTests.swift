@@ -95,6 +95,9 @@ final class TurnRollupTests: XCTestCase {
         out += db.dailyAggregatesByModel(days: 100_000)
             .map { "DM \($0.day) \($0.model) \($0.input) \($0.output) \($0.cacheRead) \(r($0.cost)) \($0.count)" }
             .sorted()
+        out += db.dailyPrimaryTokensByModel(days: 100_000)
+            .map { "DMT \($0.day) \($0.model) \($0.tokens) \(r($0.cost)) \($0.count)" }
+            .sorted()
         return out.joined(separator: "\n")
     }
 

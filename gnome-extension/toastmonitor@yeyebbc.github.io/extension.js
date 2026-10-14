@@ -1,3 +1,4 @@
+import Cairo from 'cairo';
 import Clutter from 'gi://Clutter';
 import Gio from 'gi://Gio';
 import GLib from 'gi://GLib';
@@ -47,6 +48,9 @@ export default class ToastMonitorExtension extends Extension {
         this._signals = [];
         this._claimedOwner = null;
         this._raw = null;
+        this._refreshError = null;
+        this._period = 'today';
+        this._activityMode = 'grid';
         this._build();
         this._proxy = new Gio.DBusProxy({
             g_connection: Gio.DBus.session,
@@ -97,9 +101,20 @@ export default class ToastMonitorExtension extends Extension {
         this._refresh = button('', 'Refresh ToastMonitor usage', () => this._refreshNow(), 'view-refresh-symbolic');
         header.add_child(this._refresh);
         this._root.add_child(header);
-        this._status = label('Connecting…', 'toastmonitor-muted', true);
-        this._root.add_child(this._status);
-
+        this._periods = new St.BoxLayout({style_class: 'toastmonitor-periods', x_expand: true});
+        this._periodButtons = new Map();
+        for (const [id, title] of [['today', 'Today'], ['week', '7 Days'], ['month', '30 Days'], ['all', 'All Time']]) {
+            const control = button(title, `Show usage: ${title}`, () => {
+                this._period = id;
+                if (this._data)
+                    this._render(this._data);
+            });
+            control.add_style_class_name('toastmonitor-period');
+            control.toggle_mode = true;
+            this._periodButtons.set(id, control);
+            this._periods.add_child(control);
+        }
+        this._root.add_child(this._periods);
         this._content = new St.BoxLayout({vertical: true, style_class: 'toastmonitor-content', x_expand: true});
         this._scroll = new St.ScrollView({
             hscrollbar_policy: St.PolicyType.NEVER,
@@ -109,34 +124,65 @@ export default class ToastMonitorExtension extends Extension {
             child: this._content,
         });
         this._root.add_child(this._scroll);
-        this._summary = new St.BoxLayout({vertical: true, style_class: 'toastmonitor-section'});
-        this._values = {};
-        for (const [key, title] of [['tokens', 'Tokens'], ['calls', 'Model Calls'],
-            ['apiValue', 'API Value'], ['recordedSpend', 'Recorded Spend']]) {
-            const row = new St.BoxLayout({style_class: 'toastmonitor-metric'});
-            const name = label(title);
-            name.x_expand = true;
-            row.add_child(name);
-            this._values[key] = label('—', 'toastmonitor-value toastmonitor-summary-value');
-            row.add_child(this._values[key]);
-            this._summary.add_child(row);
-        }
-        this._summary.add_child(label('API value is an estimate. Recorded spend excludes subscription fees.',
-            'toastmonitor-muted toastmonitor-note', true));
+        this._summary = new St.BoxLayout({vertical: true, style_class: 'toastmonitor-summary'});
+        const total = new St.BoxLayout({style_class: 'toastmonitor-token-line'});
+        this._tokens = label('—', 'toastmonitor-token-total');
+        total.add_child(this._tokens);
+        total.add_child(label('tokens', 'toastmonitor-muted'));
+        this._summary.add_child(total);
+        this._money = label('Spent —    Value —', 'toastmonitor-spend', true);
+        this._summary.add_child(this._money);
+        this._status = label('Connecting…', 'toastmonitor-muted toastmonitor-note', true);
+        this._summary.add_child(this._status);
         this._content.add_child(this._summary);
         this._sources = this._section('Sources');
-        this._accounts = this._section('Plans & Accounts');
+        this._accounts = this._section('Quota & Accounts');
+        this._plansButton = button('', 'Open all plans and accounts', () => this._open('Plans'), 'go-next-symbolic');
+        this._accountHeader = this._accounts.get_parent().get_first_child();
+        // Section headings stay small; the arrow is a separate focusable action.
+        const quotaHeading = new St.BoxLayout({style_class: 'toastmonitor-header'});
+        this._accountHeader.ref();
+        this._accounts.get_parent().remove_child(this._accountHeader);
+        this._accountHeader.x_expand = true;
+        quotaHeading.add_child(this._accountHeader);
+        this._accountHeader.unref();
+        quotaHeading.add_child(this._plansButton);
+        this._accounts.get_parent().insert_child_at_index(quotaHeading, 0);
+        this._activity = this._section('Activity');
+        const activityHeading = this._activity.get_parent().get_first_child();
+        activityHeading.ref();
+        this._activity.get_parent().remove_child(activityHeading);
+        const activityHeader = new St.BoxLayout({style_class: 'toastmonitor-header'});
+        activityHeading.x_expand = true;
+        activityHeader.add_child(activityHeading);
+        activityHeading.unref();
+        this._activeDays = label('', 'toastmonitor-muted');
+        activityHeader.add_child(this._activeDays);
+        activityHeader.add_child(button('', 'Show activity grid', () => {this._activityMode = 'grid'; this._drawActivity();}, 'view-grid-symbolic'));
+        const activityChartButton = button('', 'Show daily activity chart', () => {this._activityMode = 'chart'; this._drawActivity();}, 'view-grid-symbolic');
+        activityChartButton.child = new St.Icon({gicon: Gio.FileIcon.new(this.dir.get_child('toastmonitor-chart-symbolic.svg')), style_class: 'popup-menu-icon'});
+        activityHeader.add_child(activityChartButton);
+        this._activity.get_parent().insert_child_at_index(activityHeader, 0);
+        this._activityCanvas = new St.DrawingArea({style_class: 'toastmonitor-activity', x_expand: true});
+        this._activityCanvas.connect('repaint', area => this._paintActivity(area));
+        this._activity.add_child(this._activityCanvas);
         this._notice = label('', 'toastmonitor-muted', true);
         this._notice.hide();
         this._root.add_child(this._notice);
 
         const footer = new St.BoxLayout({style_class: 'toastmonitor-actions'});
-        this._openButton = button('Open Overview', 'Open ToastMonitor overview', () => this._open('Overview'));
+        footer.add_child(button('', 'Open ToastMonitor settings', () => this._open('Preferences'), 'preferences-system-symbolic'));
+        this._quitButton = button('', 'Quit ToastMonitor', () => this._call('Quit', null, error => {
+            if (error) this._showNotice('Could not quit. Open ToastMonitor and use Quit.');
+            else this._indicator.menu.close();
+        }), 'system-shutdown-symbolic');
+        footer.add_child(this._quitButton);
+        const spacer = new St.Widget({x_expand: true});
+        footer.add_child(spacer);
+        this._openButton = button('Open Dashboard', 'Open ToastMonitor dashboard', () => this._open('Overview'));
+        this._openButton.x_expand = false;
         footer.add_child(this._openButton);
-        footer.add_child(button('Preferences', 'Open ToastMonitor preferences', () => this._open('Preferences')));
         this._root.add_child(footer);
-        this._plansButton = button('View All Plans', 'Open ToastMonitor plans', () => this._open('Plans'));
-        this._root.add_child(this._plansButton);
         this._indicator.menu.connect('open-state-changed', (_menu, open) => {
             this._resize();
             if (this._claimedOwner)
@@ -161,20 +207,24 @@ export default class ToastMonitorExtension extends Extension {
     _resize() {
         const monitor = Main.layoutManager.primaryMonitor;
         const scale = St.ThemeContext.get_for_stage(global.stage).scale_factor;
-        const width = Math.max(220, Math.min(360, (monitor?.width ?? 1280) / scale - 48));
-        const height = Math.max(120, Math.min(520, (monitor?.height ?? 900) / scale - 260));
+        const width = Math.max(220, Math.min(380, (monitor?.width ?? 1280) / scale - 48));
+        const height = Math.max(120, Math.min(650, (monitor?.height ?? 900) / scale - 220));
         this._root.set_style(`width: ${width}px;`);
         this._scroll.set_style(`max-height: ${height}px;`);
     }
 
     _ownerChanged() {
+        if (this._refreshTimeout)
+            GLib.source_remove(this._refreshTimeout);
+        this._refreshTimeout = 0;
+        this._refreshError = null;
         if (this._snapshotRetry)
             GLib.source_remove(this._snapshotRetry);
         this._snapshotRetry = 0;
         this._snapshotAttempts = 0;
         this._snapshotFetching = false;
         this._raw = null;
-        this._sourceKey = this._accountKey = null;
+        this._sourceKey = this._accountKey = this._activityKey = null;
         this._claimedOwner = this._claimingOwner = null;
         if (!this._proxy.g_name_owner) {
             this._unavailable('ToastMonitor is not running. Start it to resume local usage monitoring.');
@@ -272,26 +322,135 @@ export default class ToastMonitorExtension extends Extension {
             this._claim();
             this._refresh.reactive = !this._refreshTimeout;
             this._refresh.can_focus = true;
-            this._openButton.child.text = 'Open Overview';
+            this._quitButton.reactive = true;
+            this._quitButton.can_focus = true;
+            this._openButton.child.text = 'Open Dashboard';
             this._plansButton.show();
+            this._periods.show();
             this._scroll.show();
-            this._notice.hide();
+            if (!this._refreshTimeout && !this._refreshError)
+                this._notice.hide();
             this._panelLabel.text = data.ready ? data.tokens : '…';
             this._indicator.accessible_name = data.ready ? `ToastMonitor: ${data.tokenDetail} tokens today` : 'ToastMonitor: collecting usage';
             this._status.text = data.ready ? `Today · Usage updated ${new Date(data.updatedAt * 1000).toLocaleTimeString([], {hour: '2-digit', minute: '2-digit'})}` : 'Collecting local usage…';
-            for (const key of Object.keys(this._values))
-                this._values[key].text = data.ready ? String(data[key] ?? '—') : '—';
-            if (JSON.stringify(data.sources) !== this._sourceKey) {
-                this._sourceKey = JSON.stringify(data.sources);
-                this._rows(this._sources, data.sources ?? [], 'No usage collected today.');
-            }
-            if (JSON.stringify(data.accounts) !== this._accountKey) {
-                this._accountKey = JSON.stringify(data.accounts);
-                this._rows(this._accounts, data.accounts ?? [], 'Connect accounts in Preferences to see balances and quotas.');
-            }
+            this._data = data;
+            this._render(data);
         } catch (error) {
             this._unavailable('This application needs a compatible ToastMonitor panel update.');
         }
+    }
+
+    _render(data) {
+        const period = data.periods?.find(p => p.id === this._period) ?? data;
+        for (const [id, control] of this._periodButtons) {
+            const title = data.periods?.find(p => p.id === id)?.title;
+            if (title) control.child.text = title;
+            control.reactive = id === 'today' || Boolean(data.periods?.some(p => p.id === id));
+            control.checked = id === this._period;
+        }
+        this._tokens.text = data.ready ? String(period.tokens ?? '—') : '—';
+        this._money.text = `Spent ${period.recordedSpend ?? '—'}    Value ${period.apiValue ?? '—'}`;
+        this._money.accessible_name = `Recorded spend ${period.recordedSpend ?? 'unavailable'}, excluding subscriptions. Estimated API value ${period.apiValue ?? 'unavailable'}. ${period.calls ?? '0'} calls.`;
+        this._sources.get_parent().visible = data.showSources !== false;
+        this._accounts.get_parent().visible = data.showAccounts !== false;
+        this._activity.get_parent().visible = data.showActivity !== false;
+        const sources = period.sources ?? [];
+        const sourceKey = JSON.stringify(sources);
+        if (sourceKey !== this._sourceKey) {
+            this._sourceKey = sourceKey;
+            this._sourceRows(sources);
+        }
+        const accounts = (data.accounts ?? []).map(row => {
+            if (!data.remainingQuota || !Number.isFinite(row.fraction)) return row;
+            return {...row, value: `${Math.round((1 - row.fraction) * 100)}% remaining`, fraction: 1 - row.fraction};
+        });
+        const accountKey = JSON.stringify(accounts);
+        if (accountKey !== this._accountKey) {
+            this._accountKey = accountKey;
+            this._rows(this._accounts, accounts, 'Connect accounts in Settings to see balances and quotas.');
+        }
+        this._activeDays.text = `${data.activeDays ?? 0} active days`;
+        this._activityCanvas.accessible_name = `Activity during the past six months. ${data.activeDays ?? 0} active days in the past year.`;
+        const activityKey = JSON.stringify(data.activity);
+        if (activityKey !== this._activityKey) {
+            this._activityKey = activityKey;
+            this._drawActivity();
+        }
+    }
+
+    _sourceColor(id) {
+        return ({codex: '#7d9bff', claude: '#d47745', omp: '#54adbf', hermes: '#b34fdb', opencode: '#35b963', dsh: '#6674fd'})[id] ?? '#7d9bff';
+    }
+
+    _sourceRows(rows) {
+        this._sources.destroy_all_children();
+        if (!rows.length) {
+            this._sources.add_child(label('No usage in this period.', 'toastmonitor-muted', true));
+            return;
+        }
+        const track = new St.DrawingArea({style_class: 'toastmonitor-source-track', x_expand: true});
+        track.connect('repaint', area => {
+            const cr = area.get_context();
+            const [width, height] = area.get_surface_size();
+            let x = 0;
+            for (const row of rows) {
+                const color = this._sourceColor(row.id);
+                const rgb = [1, 3, 5].map(index => parseInt(color.slice(index, index + 2), 16) / 255);
+                const part = width * (row.fraction ?? 1 / rows.length);
+                cr.setSourceRGB(...rgb); cr.rectangle(x, 0, part, height); cr.fill(); x += part;
+            }
+            cr.$dispose();
+        });
+        this._sources.add_child(track);
+        for (const row of rows) {
+            const line = new St.BoxLayout({style_class: 'toastmonitor-metric'});
+            line.add_child(new St.Widget({style_class: 'toastmonitor-source-dot', style: `background-color: ${this._sourceColor(row.id)};`, y_align: Clutter.ActorAlign.CENTER}));
+            const title = label(`${row.title}${row.fraction === undefined ? '' : `  (${(row.fraction * 100).toFixed(1)}%)`}`, 'toastmonitor-row-title', true);
+            title.x_expand = true;
+            line.add_child(title);
+            line.add_child(label(String(row.value), 'toastmonitor-value'));
+            this._sources.add_child(line);
+        }
+    }
+
+    _drawActivity() {
+        this._activityCanvas.queue_repaint();
+    }
+
+    _paintActivity(area) {
+        const cells = this._data?.activity ?? [];
+        const cr = area.get_context();
+        cr.setAntialias(Cairo.Antialias.GRAY);
+        const [width, height] = area.get_surface_size();
+        if (!cells.length) { cr.$dispose(); return; }
+        const max = Math.max(1, ...cells.map(c => c.tokens));
+        if (this._activityMode === 'chart') {
+            cr.setSourceRGBA(0.82, 0.43, 0.25, 0.9);
+            cr.setLineWidth(2);
+            cells.forEach((cell, i) => {
+                const x = width * i / Math.max(1, cells.length - 1);
+                const y = height - 8 - (height - 16) * cell.tokens / max;
+                if (i === 0) cr.moveTo(x, y); else cr.lineTo(x, y);
+            });
+            cr.stroke();
+        } else {
+            const columns = Math.ceil(cells.length / 7), gap = 2;
+            const size = Math.min((width - gap * (columns - 1)) / columns, (height - 22) / 7 - gap);
+            const fg = area.get_theme_node().get_foreground_color();
+            cr.selectFontFace('sans-serif', Cairo.FontSlant.NORMAL, Cairo.FontWeight.NORMAL);
+            cr.setFontSize(10);
+            cells.forEach((cell, i) => {
+                const x = Math.floor(i / 7) * (size + gap), y = 20 + i % 7 * (size + gap);
+                if (i % 7 === 0 && cell.month && i < cells.length - 14) {
+                    cr.setSourceRGBA(fg.red / 255, fg.green / 255, fg.blue / 255, 0.7);
+                    cr.moveTo(x, 12); cr.showText(cell.month);
+                }
+                if (cell.tokens > 0) cr.setSourceRGBA(0.82, 0.43, 0.25, 0.3 + 0.7 * Math.sqrt(cell.tokens / max));
+                else cr.setSourceRGBA(fg.red / 255, fg.green / 255, fg.blue / 255, 0.09);
+                cr.rectangle(x, y, size, size); cr.fill();
+            });
+        }
+        cr.$dispose();
     }
 
     _rows(container, rows, emptyText) {
@@ -326,10 +485,14 @@ export default class ToastMonitorExtension extends Extension {
         this._panelLabel.text = '—';
         this._indicator.accessible_name = 'ToastMonitor: unavailable';
         this._status.text = message;
+        this._showNotice(message);
+        this._periods.hide();
         this._scroll.hide();
         this._plansButton.hide();
         this._refresh.reactive = false;
         this._refresh.can_focus = false;
+        this._quitButton.reactive = false;
+        this._quitButton.can_focus = false;
         this._openButton.child.text = this._proxy?.g_name_owner ? 'Open ToastMonitor' : 'Start ToastMonitor';
     }
 
@@ -369,16 +532,20 @@ export default class ToastMonitorExtension extends Extension {
         if (!this._proxy?.g_name_owner || this._refreshTimeout)
             return;
         this._refresh.reactive = false;
+        this._refreshError = null;
         this._showNotice('Refreshing local usage and connected accounts…');
-        this._call('Refresh', null, error => {
-            if (error)
-                this._showNotice('Refresh failed. Open ToastMonitor to check its status.');
-        });
         this._refreshTimeout = GLib.timeout_add_seconds(GLib.PRIORITY_DEFAULT, 5, () => {
             this._refreshTimeout = 0;
             this._refresh.reactive = Boolean(this._proxy?.g_name_owner);
-            this._notice.hide();
+            if (!this._refreshError && this._proxy?.g_name_owner)
+                this._notice.hide();
             return GLib.SOURCE_REMOVE;
+        });
+        this._call('Refresh', null, error => {
+            if (error) {
+                this._refreshError = 'Refresh failed. Open ToastMonitor to check its status.';
+                this._showNotice(this._refreshError);
+            }
         });
     }
 

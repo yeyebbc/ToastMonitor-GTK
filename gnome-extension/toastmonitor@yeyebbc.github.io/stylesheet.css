@@ -1,21 +1,29 @@
-/* Colors and the outer popover come from the active GNOME Shell theme. */
-.toastmonitor-popup { spacing: 12px; padding: 8px 16px; }
-.toastmonitor-header { spacing: 12px; }
-.toastmonitor-title { font-size: 1.5em; font-weight: 800; }
-.toastmonitor-icon-button { padding: 8px; border-radius: 99px; }
-.toastmonitor-content { spacing: 24px; padding: 4px 4px 8px 0; }
-.toastmonitor-section { spacing: 12px; }
-.toastmonitor-heading { font-size: 1.18em; font-weight: 700; }
+/* The active Shell theme owns window material, text and native controls. */
+.toastmonitor-popup { spacing: 12px; padding: 6px 12px; }
+.toastmonitor-header { spacing: 8px; }
+.toastmonitor-title { font-size: 1.15em; font-weight: 700; }
+.toastmonitor-icon-button { padding: 6px; border-radius: 99px; }
+.toastmonitor-periods { padding: 2px; border-radius: 8px; background-color: rgba(127, 127, 127, 0.15); }
+.toastmonitor-period { padding: 6px 8px; background-color: transparent; box-shadow: none; border-radius: 6px; }
+.toastmonitor-period:checked { background-color: rgba(127, 127, 127, 0.4); }
+.toastmonitor-content { spacing: 10px; padding: 4px 4px 4px 0; }
+.toastmonitor-summary { spacing: 4px; padding: 0 2px 6px; }
+.toastmonitor-token-line { spacing: 8px; }
+.toastmonitor-token-total { font-size: 2.6em; font-weight: 700; }
+.toastmonitor-spend { font-size: 1em; }
+.toastmonitor-section { spacing: 10px; padding: 12px; border-radius: 12px; background-color: rgba(127, 127, 127, 0.12); }
+.toastmonitor-heading { font-size: 1em; font-weight: 600; }
 .toastmonitor-row-title { font-size: 1em; font-weight: 600; }
-.toastmonitor-value { font-size: 1em; font-weight: 700; }
-.toastmonitor-summary-value { font-size: 1.1em; }
-/* Secondary foreground tone is applied by label() using the theme colour. */
-.toastmonitor-muted { font-size: 0.95em; font-weight: 400; }
-.toastmonitor-note { padding-top: 4px; }
-.toastmonitor-metric { spacing: 16px; }
-.toastmonitor-rows { spacing: 16px; }
-.toastmonitor-data-row { spacing: 6px; }
-.toastmonitor-actions { spacing: 12px; }
-.toastmonitor-button { padding: 10px 12px; }
-.toastmonitor-quota-track { height: 4px; border-radius: 2px; background-color: rgba(127, 127, 127, 0.35); }
-.toastmonitor-quota-fill { height: 4px; border-radius: 2px; background-color: #3584e4; }
+.toastmonitor-value { font-size: 1em; font-weight: 600; font-feature-settings: "tnum"; }
+.toastmonitor-muted { font-size: 0.9em; font-weight: 400; }
+.toastmonitor-note { padding-top: 2px; }
+.toastmonitor-metric { spacing: 8px; }
+.toastmonitor-rows { spacing: 8px; }
+.toastmonitor-data-row { spacing: 4px; }
+.toastmonitor-actions { spacing: 8px; padding-top: 8px; border-top: 1px solid rgba(127, 127, 127, 0.15); }
+.toastmonitor-button { padding: 7px 10px; }
+.toastmonitor-source-track { height: 5px; border-radius: 3px; }
+.toastmonitor-source-dot { width: 6px; height: 6px; border-radius: 3px; }
+.toastmonitor-quota-track { height: 4px; border-radius: 2px; background-color: rgba(127, 127, 127, 0.25); }
+.toastmonitor-quota-fill { height: 4px; border-radius: 2px; background-color: #7d9bff; }
+.toastmonitor-activity { height: 115px; }

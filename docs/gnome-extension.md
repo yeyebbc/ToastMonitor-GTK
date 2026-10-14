@@ -1,6 +1,6 @@
 # GNOME Shell panel
 
-ToastMonitor includes an optional GNOME Shell 46 extension, `toastmonitor@yeyebbc.github.io`. Clicking its top-bar indicator opens a native Shell popup with today's tokens and calls, estimated API value, recorded spend, per-tool totals, connected account balances and subscription quotas. The panel follows the Shell theme. Long account lists scroll; Overview, Preferences and Plans remain reachable below the scroll area.
+ToastMonitor includes an optional GNOME Shell 46 extension, `toastmonitor@yeyebbc.github.io`. Clicking its top-bar indicator opens a native Shell popup with Today, 7 Days, 30 Days and All Time controls, a token total, recorded spend and estimated API value, source shares, quotas and account balances, and a six-month activity grid or chart. It follows the macOS popup layout while keeping the Shell theme. Long account lists scroll; Settings, Quit and Open Dashboard remain reachable in the fixed footer. Settings → Appearance controls token formatting, used or remaining quota, and section visibility.
 
 The Swift application remains responsible for collection, authentication, pricing and SQLite. The extension uses the session bus only; it does not read credentials or the usage database and makes no network requests. Failed provider refreshes retain their last known quota or balance and are labeled accordingly. API value, recorded spend, balances and subscription fees are never added together.
 
@@ -45,14 +45,19 @@ gnome-extensions disable toastmonitor@yeyebbc.github.io
 - `SnapshotChanged(s)` and standard `PropertiesChanged` notify subscribers. Only changed payloads are emitted.
 - `Open(s)`: accepts `Overview`, `Analysis`, `Plans`, `Sessions` or `Preferences`; rejects unknown pages.
 - `Refresh()`: requests a refresh through the existing collectors, with a five-second click cooldown and existing provider backoff.
+- `Quit()`: stops ToastMonitor, including background collection; the extension then shows its stopped state.
 - `SetPanelActive(b)`: obtains/releases the fallback-tray lease, tied to the caller's unique bus name.
 - `SetExpanded(b)`: reports popup visibility to the existing foreground refresh policy; only the lease owner can change it.
+
+The version-1 payload adds `periods` for the four selectable summaries, source `fraction` values for the share bar, and dated `activity` samples with month labels and an `activeDays` total. `showSources`, `showAccounts`, `showActivity` and `remainingQuota` carry presentation preferences. These fields are additive; the original top-level Today totals remain available to older extension versions.
 
 Payloads contain display strings, timestamps, tool totals and bounded quota fractions. They exclude secrets, raw provider errors, session titles and project paths. Like the existing tray summary, they are visible to other processes belonging to the same desktop user.
 
 ## Verification
 
-`swift test` includes accounting/serialization cases. `scripts/test-panel-setup.py` checks user installation, file updates, first-login behavior, opt-outs and failure handling. `scripts/test-panel-login-order.py` runs an isolated real gnome-session with a test window-manager component to verify copying finishes before its WindowManager phase. The normal Linux smoke test exercises the actual D-Bus interface, navigation, invalid page rejection, refresh, lease ownership, extension disable and connection-loss recovery against an isolated database and session bus. `scripts/smoke-gnome-extension.sh` installs user files before starting an isolated headless GNOME 46 compositor, then runs activation after startup. It asserts GNOME reports type 2 (user extension) at the expected user path, verifies preserved disabling, and exercises the popup. It also starts a legacy app fixture with no panel interface to verify the connection timeout and subsequent recovery. Its temporary test driver permits evaluation only in that private Shell, never in the user's desktop. CI repeats this test using the helper, extension sources and app extracted from the Debian package; it does not run a full desktop login.
+`swift test` includes accounting/serialization cases and verifies that opening Settings preserves Dashboard navigation. `scripts/test-panel-setup.py` checks user installation, file updates, first-login behavior, opt-outs and failure handling. `scripts/test-panel-login-order.py` runs an isolated real gnome-session with a test window-manager component to verify copying finishes before its WindowManager phase. The normal Linux smoke test exercises the actual D-Bus interface, navigation, invalid page rejection, refresh, lease ownership, extension disable and connection-loss recovery against an isolated database and session bus.
+
+`scripts/smoke-gnome-extension.sh` installs user files before starting an isolated headless GNOME 46 compositor, then runs activation after startup. It asserts GNOME reports type 2 (user extension) at the expected user path and verifies preserved disabling. Popup checks cover all four periods, separate Dashboard and Settings windows, keyboard and click-away behavior, refresh feedback through live updates, persistent refresh failures, and Quit. A legacy app fixture with no panel interface verifies the connection timeout and subsequent recovery. Its temporary test driver permits evaluation only in that private Shell, never in the user's desktop. CI repeats this test using the helper, extension sources and app extracted from the Debian package; it does not run a full desktop login.
 
 ## Connection problems
 

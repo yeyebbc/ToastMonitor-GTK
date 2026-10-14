@@ -33,11 +33,17 @@ struct ToastMonitor: App {
         Window(id: "main") { _ in
             MainActor.assumeIsolated { MonitorView(runtime: .shared) }
         }
-        .title("ToastMonitor")
-        .defaultSize(width: 720, height: 760)
+        .title("ToastMonitor Dashboard")
+        .defaultSize(width: 1120, height: 740)
         .closeShortcut()
         .appKeyboardShortcut("q".ctrl()) { _ in MainActor.assumeIsolated { LinuxRuntime.shared.quit() } }
         .appKeyboardShortcut("comma".ctrl()) { _ in MainActor.assumeIsolated { LinuxRuntime.shared.show(.preferences) } }
+        Window(id: "settings", open: 0) { _ in
+            MainActor.assumeIsolated { SettingsView(runtime: .shared) }
+        }
+        .title("ToastMonitor Settings")
+        .defaultSize(width: 760, height: 820)
+        .closeShortcut()
     }
 }
 

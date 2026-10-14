@@ -38,6 +38,33 @@ final class PanelSnapshotTests: XCTestCase {
         XCTAssertNil(keys["credentials"])
     }
 
+    func testSelectablePeriodsKeepSeparateSpendAndSourceShares() async {
+        await MainActor.run {
+            let day = Database.ToolTotals(tool: "codex", input: 1_000, output: 100, cacheRead: 500, cacheWrite: 0, cost: 12.5, count: 4)
+            let week = Database.ToolTotals(tool: "claude", input: 2_000, output: 200, cacheRead: 1_000, cacheWrite: 0, cost: 24, count: 8)
+            let quality = UsageQueryService.CostQuality(estimated: 12.5, actual: 3.25)
+            let snapshot = UsageQueryService.LightSnapshot(today: day, week: week, month: week, all: week,
+                todayTokens: 1_100, weekTokens: 3_200, monthTokens: 3_200, allTokens: 3_200,
+                byToolToday: [day], byToolWeek: [week], byToolMonth: [week], byToolAll: [week],
+                costToday: quality, costWeek: quality, costMonth: quality, costAll: quality,
+                apiValueToday: 12.5, apiValueWeek: 24, apiValueMonth: 24, apiValueAll: 24,
+                subscriptions: [], lastScan: 0, fetchedAt: 0)
+            var panel = PanelSnapshot.usage(snapshot)
+            panel.addPresentation(snapshot: snapshot, heatmap: [DashboardDate.key(Date()): 1_100],
+                configuration: .init(mode: .recent, weekStart: .monday), options: .init(fullTokens: true, showActivity: false))
+            XCTAssertEqual(panel.periods.map(\.id), ["today", "week", "month", "all"])
+            XCTAssertEqual(panel.periods[0].tokens, "1,100")
+            XCTAssertEqual(panel.periods[1].tokens, "3,200")
+            XCTAssertEqual(panel.periods[0].sources.first?.fraction, 1)
+            XCTAssertEqual(panel.periods[1].sources.first?.fraction, 1)
+            XCTAssertEqual(panel.periods[0].recordedSpend, Format.money(3.25))
+            XCTAssertEqual(panel.periods[1].apiValue, Format.money(24))
+            XCTAssertEqual(panel.activeDays, 1)
+            XCTAssertFalse(panel.showActivity)
+            XCTAssertEqual(panel.activity.last?.tokens, 1_100)
+        }
+    }
+
     func testQuotaKeepsStaleStatusAndBoundsProgress() {
         let stale = PanelSnapshot.Row.quota(
             "codex", "Codex", percent: 110, reset: 10,

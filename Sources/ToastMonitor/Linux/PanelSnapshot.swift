@@ -3,7 +3,7 @@ import Foundation
 /// Versioned, presentation-only D-Bus payload. Never includes credentials,
 /// session titles, project paths, or raw provider responses.
 struct PanelSnapshot: Codable {
-    struct Row: Codable {
+    struct Row: Codable, Identifiable {
         let id: String
         let title: String
         let value: String
@@ -60,6 +60,90 @@ struct PanelSnapshot: Codable {
                 detail: "\(Format.full(total.count)) calls · \(money(total.cost)) API value")
         }
         return result
+    }
+
+    struct Period: Codable {
+        let id: String
+        let title: String
+        let tokens: String
+        let tokenDetail: String
+        let calls: String
+        let apiValue: String
+        let recordedSpend: String
+        let sources: [Row]
+    }
+    struct Activity: Codable {
+        let day: Int64
+        let tokens: Int64
+        let month: String
+    }
+    var periods: [Period] = []
+    var activity: [Activity] = []
+    var activeDays = 0
+    var showSources = true
+    var showAccounts = true
+    var showActivity = true
+    var remainingQuota = false
+
+    struct PresentationOptions {
+        var fullTokens = false
+        var remainingQuota = false
+        var showSources = true
+        var showAccounts = true
+        var showActivity = true
+        static func load() -> Self {
+            .init(fullTokens: Database.shared.setting("panel_full_tokens") == "1",
+                  remainingQuota: Database.shared.setting("panel_remaining_quota") == "1",
+                  showSources: Database.shared.setting("panel_show_sources") != "0",
+                  showAccounts: Database.shared.setting("panel_show_accounts") != "0",
+                  showActivity: Database.shared.setting("panel_show_activity") != "0")
+        }
+    }
+
+    @MainActor
+    mutating func addPresentation(snapshot: UsageQueryService.LightSnapshot?, heatmap: [Int64: Int64],
+                                  configuration: UsagePeriodConfiguration? = nil, options: PresentationOptions? = nil) {
+        guard let snapshot else { return }
+        let settings = options ?? PresentationOptions.load()
+        let full = settings.fullTokens
+        func format(_ n: Int64) -> String { full ? Format.full(n) : Format.compact(n) }
+        let configuration = configuration ?? UsagePeriodSettings.shared.configuration
+        let rows: [(UsagePeriodSlot, Int64, Int64, Double, Double, [Database.ToolTotals])] = [
+            (.today, snapshot.todayTokens, snapshot.today.count, snapshot.apiValueToday, snapshot.costToday.actual, snapshot.byToolToday),
+            (.week, snapshot.weekTokens, snapshot.week.count, snapshot.apiValueWeek, snapshot.costWeek.actual, snapshot.byToolWeek),
+            (.month, snapshot.monthTokens, snapshot.month.count, snapshot.apiValueMonth, snapshot.costMonth.actual, snapshot.byToolMonth),
+            (.all, snapshot.allTokens, snapshot.all.count, snapshot.apiValueAll, snapshot.costAll.actual, snapshot.byToolAll)
+        ]
+        periods = rows.map { slot, tokens, calls, value, spend, totals in
+            Period(id: slot.rawValue, title: configuration.label(for: slot), tokens: format(tokens), tokenDetail: Format.full(tokens),
+                   calls: Format.full(calls), apiValue: Self.money(value), recordedSpend: Self.money(spend),
+                   sources: totals.sorted { (ToolKind(rawValue: $0.tool)?.totalTokens($0) ?? 0) > (ToolKind(rawValue: $1.tool)?.totalTokens($1) ?? 0) }.map { total in
+                let tool = ToolKind(rawValue: total.tool)
+                let n = tool?.totalTokens(total) ?? total.input + total.output
+                return Row(id: total.tool, title: tool?.displayName ?? total.tool, value: format(n),
+                           detail: String(format: "%.1f%%", Double(n) / Double(max(1, tokens)) * 100),
+                           fraction: Double(n) / Double(max(1, tokens)))
+            })
+        }
+        let calendar = Calendar.current
+        let today = calendar.startOfDay(for: Date())
+        let weekday = (calendar.component(.weekday, from: today) + 5) % 7
+        let start = calendar.date(byAdding: .day, value: -175 - weekday, to: today)!
+        let formatter = DateFormatter(); formatter.dateFormat = "MMM"
+        var previous = -1
+        activity = (0..<(176 + weekday)).compactMap { index in
+            guard let date = calendar.date(byAdding: .day, value: index, to: start) else { return nil }
+            let key = DashboardDate.key(date)
+            let month = calendar.component(.month, from: date)
+            let name = index % 7 == 0 && month != previous ? formatter.string(from: date) : ""
+            if !name.isEmpty { previous = month }
+            return Activity(day: key, tokens: heatmap[key] ?? 0, month: name)
+        }
+        activeDays = heatmap.values.filter { $0 > 0 }.count
+        showSources = settings.showSources
+        showAccounts = settings.showAccounts
+        showActivity = settings.showActivity
+        remainingQuota = settings.remainingQuota
     }
 
     static func money(_ value: Double) -> String { value.isFinite ? Format.money(value) : "—" }

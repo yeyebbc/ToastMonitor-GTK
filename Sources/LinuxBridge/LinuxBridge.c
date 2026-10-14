@@ -40,6 +40,16 @@ void *tm_main_window(void) {
     GList *windows = gtk_application_get_windows(app);
     return windows ? windows->data : NULL;
 }
+void *tm_window_named(const char *title) {
+    GtkApplication *app = GTK_APPLICATION(g_application_get_default());
+    for (GList *w = gtk_application_get_windows(app); w; w = w->next)
+        if (!g_strcmp0(gtk_window_get_title(GTK_WINDOW(w->data)), title)) return w->data;
+    return NULL;
+}
+void tm_preview_text_scale(double scale) {
+    if (!g_strcmp0(g_getenv("TM_TEST_MODE"), "1") && scale >= 1 && scale <= 2)
+        g_object_set(gtk_settings_get_default(), "gtk-xft-dpi", (int)(96 * 1024 * scale), NULL);
+}
 static gboolean hide_on_close(GtkWindow *window, void *data) {
     gtk_widget_set_visible(GTK_WIDGET(window), FALSE);
     return TRUE;
@@ -87,6 +97,7 @@ static const char *panel_xml =
 "<property name='Snapshot' type='s' access='read'/>"
 "<method name='Open'><arg name='page' type='s' direction='in'/></method>"
 "<method name='Refresh'/>"
+"<method name='Quit'/>"
 "<method name='SetPanelActive'><arg name='active' type='b' direction='in'/></method>"
 "<method name='SetExpanded'><arg name='expanded' type='b' direction='in'/></method>"
 "<signal name='SnapshotChanged'><arg name='snapshot' type='s'/></signal>"
@@ -124,6 +135,8 @@ static void panel_method(GDBusConnection *connection, const char *sender, const 
         if (action_callback) action_callback(action);
     } else if (!strcmp(method, "Refresh")) {
         if (action_callback) action_callback(3);
+    } else if (!strcmp(method, "Quit")) {
+        if (action_callback) action_callback(4);
     } else if (!strcmp(method, "SetPanelActive")) {
         gboolean active;
         g_variant_get(parameters, "(b)", &active);

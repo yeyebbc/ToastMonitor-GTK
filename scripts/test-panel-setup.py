@@ -31,7 +31,7 @@ class SetupTests(unittest.TestCase):
             source = Path(home) / 'bundle'
             source.mkdir()
             (source / 'metadata.json').write_text(json.dumps({'uuid': module.UUID}))
-            for name in ('extension.js', 'stylesheet.css', 'toastmonitor-token-symbolic.svg'):
+            for name in ('extension.js', 'stylesheet.css', 'toastmonitor-token-symbolic.svg', 'toastmonitor-chart-symbolic.svg'):
                 (source / name).write_text('first version')
             data = Path(home) / 'user-data'
             target = module.install_extension(source, data)
