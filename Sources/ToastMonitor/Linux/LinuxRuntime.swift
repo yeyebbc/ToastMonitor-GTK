@@ -33,6 +33,7 @@ final class LinuxRuntime {
     @State(forceUpdates: true) var sessions: [Database.SessionRow] = []
     @State(forceUpdates: true) var daily: [Database.DayAgg] = []
     @State(forceUpdates: true) var message = ""
+    let collectionComplete = Signal()
     @State(forceUpdates: true) var revision = 0
     private var app: AdwaitaApp?
     private var window: UnsafeMutableRawPointer?
@@ -167,10 +168,9 @@ final class LinuxRuntime {
     func refreshNow() {
         guard Date().timeIntervalSince(lastExplicitRefresh) >= 5 else { return }
         lastExplicitRefresh = Date()
-        if ProcessInfo.processInfo.environment["TM_TEST_MODE"] == "1" { refresh(); return }
+        if ProcessInfo.processInfo.environment["TM_TEST_MODE"] == "1" { collectionFinished([]); return }
         CollectorEngine.shared.scheduleScan(force: true) { [weak self] receipt in
-            self?.message = receipt.failedSources.isEmpty ? "Collection complete" : "Retrying: " + receipt.failedSources.joined(separator: ", ")
-            self?.refresh()
+            self?.collectionFinished(receipt.failedSources)
         }
         OpenRouterClient.shared.refresh()
         OpenCodeGoClient.shared.refresh()
@@ -178,6 +178,16 @@ final class LinuxRuntime {
         CodexQuotaClient.shared.refresh()
         CommandCodeQuotaClient.shared.refresh()
         DeepSeekBillingClient.shared.refresh(force: true)
+    }
+
+    private func collectionFinished(_ failedSources: [String]) {
+        if failedSources.isEmpty {
+            if message.hasPrefix("Retrying: ") { message = "" }
+            collectionComplete.signal()
+        } else {
+            message = "Retrying: " + failedSources.joined(separator: ", ")
+        }
+        refresh()
     }
 
     func show(_ page: MonitorPage) {

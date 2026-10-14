@@ -25,6 +25,14 @@ struct MonitorView: View {
             Separator()
             ScrollView {
                 VStack {
+                    VStack {
+                        Text(runtime.page == .analysis ? "Daily Usage" : runtime.page.rawValue)
+                            .wrap().xalign(0).style("tm-page-title")
+                        if runtime.page == .analysis {
+                            Text("Last 30 days · tokens, calls and estimated API value")
+                                .wrap().xalign(0).style("tm-secondary")
+                        }
+                    }.spacing(6)
                     if runtime.page == .overview {
                         overview
                     } else if runtime.page == .analysis {
@@ -54,6 +62,9 @@ struct MonitorView: View {
                 .padding(24, [.leading, .trailing])
             }
         }
+        .style("toastmonitor-window")
+        .css { NativeTypography.css }
+        .toast("Collection complete", signal: runtime.collectionComplete)
         .topToolbar {
             HeaderBar {
                 Button("Refresh") { runtime.refreshNow() }
@@ -131,11 +142,6 @@ struct MonitorView: View {
 
     @ViewBuilder var analysis: Body {
         VStack {
-            VStack {
-                Text("Daily Usage").style("title-2").halign(.start)
-                Text("Last 30 days · tokens, calls and estimated API value")
-                    .wrap().xalign(0).style("dim-label")
-            }.spacing(6)
             if runtime.daily.isEmpty {
                 NativePreferencesRows(rows: [
                     NativePreferencesRow(
@@ -193,7 +199,7 @@ struct MonitorView: View {
 
     private var periodPicker: AnyView {
         HStack {
-            Text("Usage period").xalign(0).style("heading").hexpand()
+            Text("Usage period").xalign(0).style("tm-control-label").hexpand()
             Menu(UsagePeriodSettings.shared.configuration.label(for: runtime.period)) {
                 MenuButton("Today") { selectPeriod(.today) }
                 MenuButton("Week / 7 Days") { selectPeriod(.week) }
@@ -359,7 +365,7 @@ struct MonitorView: View {
         ActionRow().title(title).subtitle(subtitle).useMarkup(false).titleLines(2).subtitleLines(3)
             .suffix {
                 if !value.isEmpty {
-                    Text(value).selectable().xalign(1).style("heading").padding(12, [.leading])
+                    Text(value).selectable().xalign(1).style("tm-value").padding(12, [.leading])
                 }
             }
             .tooltip([title, subtitle, value].compactMap { $0 }.filter { !$0.isEmpty }.joined(separator: "\n"))
@@ -373,7 +379,7 @@ struct MonitorView: View {
             )
             .suffix {
                 VStack {
-                    Text("\(Int(percent.rounded()))% used").style("heading")
+                    Text("\(Int(percent.rounded()))% used").style("tm-value")
                     ProgressBar().fraction(min(max(percent / 100, 0), 1))
                 }.spacing(6).frame(minWidth: 120).padding(12, [.leading])
             }

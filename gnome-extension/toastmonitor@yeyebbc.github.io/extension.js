@@ -15,6 +15,10 @@ const IFACE = 'io.github.yeyebbc.ToastMonitor.Panel';
 
 function label(text, style = '', wrap = false) {
     const actor = new St.Label({text, style_class: style, y_align: Clutter.ActorAlign.CENTER});
+    // Derive secondary text from the active theme's foreground in light, dark,
+    // and custom Shell themes instead of fixing a grey that only suits one.
+    if (style.split(' ').includes('toastmonitor-muted'))
+        actor.opacity = 204;
     if (wrap) {
         actor.clutter_text.line_wrap = true;
         actor.clutter_text.line_wrap_mode = Pango.WrapMode.WORD_CHAR;
@@ -87,7 +91,7 @@ export default class ToastMonitorExtension extends Extension {
         this._indicator.menu.addMenuItem(item);
 
         const header = new St.BoxLayout({style_class: 'toastmonitor-header'});
-        const title = label('ToastMonitor', 'toastmonitor-title');
+        const title = label('ToastMonitor', 'toastmonitor-title', true);
         title.x_expand = true;
         header.add_child(title);
         this._refresh = button('', 'Refresh ToastMonitor usage', () => this._refreshNow(), 'view-refresh-symbolic');
@@ -113,7 +117,7 @@ export default class ToastMonitorExtension extends Extension {
             const name = label(title);
             name.x_expand = true;
             row.add_child(name);
-            this._values[key] = label('—', 'toastmonitor-value');
+            this._values[key] = label('—', 'toastmonitor-value toastmonitor-summary-value');
             row.add_child(this._values[key]);
             this._summary.add_child(row);
         }
@@ -147,7 +151,7 @@ export default class ToastMonitorExtension extends Extension {
 
     _section(title) {
         const section = new St.BoxLayout({vertical: true, style_class: 'toastmonitor-section'});
-        section.add_child(label(title, 'toastmonitor-heading'));
+        section.add_child(label(title, 'toastmonitor-heading', true));
         const rows = new St.BoxLayout({vertical: true, style_class: 'toastmonitor-rows'});
         section.add_child(rows);
         this._content.add_child(section);
@@ -299,7 +303,7 @@ export default class ToastMonitorExtension extends Extension {
         for (const row of rows) {
             const box = new St.BoxLayout({vertical: true, style_class: 'toastmonitor-data-row'});
             const top = new St.BoxLayout({style_class: 'toastmonitor-metric'});
-            const title = label(String(row.title), '', true);
+            const title = label(String(row.title), 'toastmonitor-row-title', true);
             title.x_expand = true;
             top.add_child(title);
             top.add_child(label(String(row.value), 'toastmonitor-value'));
