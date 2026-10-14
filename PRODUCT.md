@@ -31,7 +31,7 @@ ToastMonitor-GTK 是上游 ToastMonitor 的 GNOME/Linux 原生移植版，复用
 - 应用与 AI 编程工具运行在同一台 Linux 电脑上，默认自动采集本地日志；远程数据源需显式配置。
 - GNOME Shell 46 可选原生顶栏面板提供今日 token、调用、费用、余额和订阅额度，以及 Overview、Preferences、Plans 和刷新入口；普通托盘仍提供今日 token 总量及刷新、窗口和退出入口。关闭窗口继续采集；退出应用才停止采集。
 - 窗口包含 Overview、Analysis、Plans、Sessions 和 Preferences；可按今日、周/7 天、月/30 天或全部时间查看用量。
-- GNOME Shell 46 原生面板使用随应用提供的 ToastMonitor 扩展；连接时隐藏普通托盘，禁用或断开后恢复托盘。普通 GNOME Shell 托盘需要 AppIndicator/KStatusNotifierItem 扩展；没有任一扩展时仍可使用应用窗口。
+- GNOME Shell 46 原生面板使用随应用提供的 ToastMonitor 扩展；1.0.4 起 Debian 包在安装后的首次 GNOME 登录自动启用，之后尊重用户禁用选择，不自动启动采集器。连接时隐藏普通托盘，禁用或断开后恢复托盘。普通 GNOME Shell 托盘需要 AppIndicator/KStatusNotifierItem 扩展；没有任一扩展时仍可使用应用窗口。
 - 字体、明暗外观和原生控件遵循 GNOME 桌面设置。保留 GNOME 原生体验，不套用网页或 macOS 的交互习惯。
 - 使用 XDG 数据目录和 GNOME Secret Service。保存凭据需要可用且已解锁的 Secret Service；本地采集不依赖凭据存储服务。
 

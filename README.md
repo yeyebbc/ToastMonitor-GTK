@@ -49,7 +49,7 @@ swift test
 swift run ToastMonitor
 ```
 
-On **GNOME Shell 46**, the bundled **ToastMonitor extension** opens a native popup from the top bar, showing today's usage, costs, balances and quotas. Enable `toastmonitor@yeyebbc.github.io` after installation; see [installation and panel details](docs/gnome-extension.md). The extension uses the application's session-bus interface and hides the fallback tray while connected. Installing it does not enable login autostart.
+On **GNOME Shell 46**, the bundled **ToastMonitor extension** opens a native popup from the top bar, showing today's usage, costs, balances and quotas. The Debian package installs the extension and enables it once at your next GNOME login; log out and back in after installing. Later disabling is respected. See [installation and panel details](docs/gnome-extension.md). The extension uses the application's session-bus interface and hides the fallback tray while connected. The collector does not start automatically at login.
 
 For the ordinary tray menu, install and enable [AppIndicator and KStatusNotifierItem Support](https://extensions.gnome.org/extension/615/appindicator-support/), e.g. `sudo apt-get install gnome-shell-extension-appindicator` on Ubuntu. This fallback uses **StatusNotifierItem and DBusMenu over the session bus**, works on Wayland, and re-registers after a shell/extension restart. Other desktops with StatusNotifier support also work. Some hosts display only the icon; the total remains in its tooltip and menu. The application window remains accessible without either extension.
 
@@ -69,7 +69,7 @@ ToastMonitor --background             # start hidden in the tray
 ./scripts/package-extension.sh        # optional GNOME Shell 46 extension ZIP
 ```
 
-Building a `.deb` also requires `dpkg-dev` (for `dpkg-shlibdeps` and `dpkg-architecture`). The package bundles the Swift runtimes, declares system-library dependencies, and installs under `/usr`. Install it with `sudo apt install ./dist/release/toastmonitor_1.0.3-1_amd64.deb` (adjust the filename for your version and architecture). `TM_VERSION` and `TM_DEB_REVISION` set the package version; `TM_DEB_MAINTAINER` optionally sets its maintainer field. Installation does not enable login autostart.
+Building a `.deb` also requires `dpkg-dev` (for `dpkg-shlibdeps` and `dpkg-architecture`). The package bundles the Swift runtimes, declares system-library dependencies, and installs under `/usr`. Install it with `sudo apt install ./dist/release/toastmonitor_1.0.4-1_amd64.deb` (adjust the filename for your version and architecture). `TM_VERSION` and `TM_DEB_REVISION` set the package version; `TM_DEB_MAINTAINER` optionally sets its maintainer field. Installation does not enable login autostart.
 
 GitHub Actions compiles, tests and packages the application on pushes to `main`, pull requests, and manual runs. Download the `.deb` and SHA-256 checksum from the run's `toastmonitor-linux-amd64-<commit>` artifact, retained for 30 days. CI uses the run number as the Debian revision; manual runs can set the package version. Both the debug application and the extracted release package undergo the isolated tray integration check. No package is installed or release published by this workflow.
 

@@ -48,6 +48,22 @@ def status():
 
 process = None
 try:
+    # The login helper, rather than the custom test mode, must activate it.
+    assert (Path(os.environ['XDG_STATE_HOME']) / 'toastmonitor/gnome-panel-setup-v1').is_file()
+    def extension_call(method):
+        return bus.call_sync('org.gnome.Shell', '/org/gnome/Shell',
+            'org.gnome.Shell.Extensions', method, GLib.Variant('(s)', (UUID,)),
+            None, Gio.DBusCallFlags.NONE, 5000, None).unpack()[0]
+    assert extension_call('GetExtensionInfo')['state'] == 1
+    assert extension_call('DisableExtension')
+    subprocess.run(['/usr/bin/python3', os.environ.get('TM_PANEL_SETUP_HELPER', 'scripts/enable-gnome-panel.py')], check=True)
+    assert extension_call('GetExtensionInfo')['state'] == 2
+    assert extension_call('EnableExtension')
+    for attempt in range(100):
+        if extension_call('GetExtensionInfo')['state'] == 1:
+            break
+        time.sleep(0.1)
+    assert extension_call('GetExtensionInfo')['state'] == 1
     evaluate('e._indicator.menu.open(); return true;')
     capture('stopped')
     process = subprocess.Popen([os.environ['TM_SMOKE_BINARY'], '--background'],

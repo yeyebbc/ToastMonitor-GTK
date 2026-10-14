@@ -32,9 +32,9 @@ export default class TestDriver extends Extension {
 }
 JS
 cat > "$smoke_dir/system/gnome-shell/modes/toastmonitor-test.json" <<'JSON'
-{"parentMode":"user","hasOverview":false,"showWelcomeDialog":false,"showCalendarEvents":false,"components":[],"enabledExtensions":["toastmonitor-test@local","toastmonitor@yeyebbc.github.io"]}
+{"parentMode":"user","hasOverview":false,"showWelcomeDialog":false,"showCalendarEvents":false,"components":[],"enabledExtensions":["toastmonitor-test@local"]}
 JSON
-export XDG_DATA_HOME="$smoke_dir/data" XDG_CONFIG_HOME="$smoke_dir/config" XDG_RUNTIME_DIR="$smoke_dir/runtime" XDG_DATA_DIRS="$smoke_dir/system:/usr/share"
+export XDG_DATA_HOME="$smoke_dir/data" XDG_CONFIG_HOME="$smoke_dir/config" XDG_STATE_HOME="$smoke_dir/state" XDG_RUNTIME_DIR="$smoke_dir/runtime" XDG_DATA_DIRS="$smoke_dir/system:/usr/share"
 export GSETTINGS_BACKEND=memory GTK_A11Y=none LIBGL_ALWAYS_SOFTWARE=1
 export TM_TEST_MODE=1 TM_DATABASE_PATH="$smoke_dir/usage.db" GSK_RENDERER=cairo
 export TM_SMOKE_BINARY="${TM_SMOKE_BINARY:-$PWD/.build/debug/ToastMonitor}"
@@ -47,6 +47,7 @@ for attempt in {1..120}; do
   sleep 0.25
 done
 grep -q true "$smoke_dir/ready"
+/usr/bin/python3 "${TM_PANEL_SETUP_HELPER:-scripts/enable-gnome-panel.py}"
 export WAYLAND_DISPLAY=wayland-0 GDK_BACKEND=wayland
 /usr/bin/python3 scripts/test-gnome-extension.py
 if grep -E 'JS ERROR|Extension .*toastmonitor.*Error|Theme parsing error' "$smoke_dir/shell.log"; then exit 1; fi

@@ -1,0 +1,11 @@
+[Desktop Entry]
+Type=Application
+Name=ToastMonitor Panel Setup
+Comment=Enable the bundled GNOME panel on first login
+Exec=/usr/libexec/toastmonitor/enable-gnome-panel
+TryExec=/usr/libexec/toastmonitor/enable-gnome-panel
+OnlyShowIn=GNOME;
+NoDisplay=true
+Terminal=false
+X-GNOME-Autostart-enabled=true
+X-GNOME-Autostart-Phase=Applications
