@@ -4,7 +4,7 @@
   "description": "AI usage, recorded spend, balances and subscription quotas in a native GNOME panel. Requires the ToastMonitor GTK application.",
   "shell-version": ["46"],
   "url": "https://github.com/yeyebbc/ToastMonitor-GTK",
-  "version": 3,
-  "version-name": "1.0.6",
+  "version": 4,
+  "version-name": "1.0.7",
   "session-modes": ["user"]
 }

@@ -10,7 +10,7 @@ enum NativeTypography {
     .toastmonitor-window .tm-segments { background-color: alpha(@window_fg_color, 0.07); border-radius: 7px; padding: 2px; }
     .toastmonitor-window .tm-segments button { padding: 5px 12px; min-height: 22px; border-radius: 5px; font-weight: 400; }
     .toastmonitor-window .tm-segments button:checked { background-color: @view_bg_color; box-shadow: 0 1px 3px alpha(black, 0.14); }
-    .toastmonitor-window .tm-settings-tabs button { padding: 10px 14px; border-radius: 8px; }
+    .toastmonitor-window .tm-settings-tabs button { min-width: 104px; min-height: 76px; padding: 0; border-radius: 8px; }
     .toastmonitor-window .tm-settings-tabs button:checked { color: @accent_color; background-color: alpha(@window_fg_color, 0.06); }
     .toastmonitor-window .tm-settings-tabs image { -gtk-icon-size: 28px; }
     .toastmonitor-window preferencesgroup > box > box.header > box.labels > label.heading { font-size: 1.05em; font-weight: 700; }

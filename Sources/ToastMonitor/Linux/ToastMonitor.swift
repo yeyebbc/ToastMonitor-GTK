@@ -65,7 +65,7 @@ enum LinuxCLI {
               --export-diagnostics PATH    Export redacted diagnostics
             Credentials are stored in GNOME Secret Service, never in argv.
             """)
-        case "--version": print("ToastMonitor GNOME 1.0.6")
+        case "--version": print("ToastMonitor GNOME 1.0.7")
         case "--provision-or-key", "--set-or-key":
             Database.shared.open()
             guard let secret = readLine(), !secret.isEmpty,

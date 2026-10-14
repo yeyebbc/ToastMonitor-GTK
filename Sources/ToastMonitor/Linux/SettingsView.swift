@@ -16,11 +16,14 @@ struct SettingsView: View {
                             VStack {
                                 NativeSymbol(name: tab.icon)
                                 Text(tab.rawValue)
-                            }.spacing(5)
+                            }.spacing(5).valign(.center)
                         }.active(.init(get: { selected == tab }, set: { if $0 { runtime.settingsPage = tab } }))
                             .style("flat")
-                    }.inspectOnAppear { storage in NativeToggleGroup.apply(storage.opaquePointer?.cast()) }
-                }.spacing(4).halign(.center).padding(12).style("tm-settings-tabs")
+                    }.spacing(8).inspectOnAppear { storage in
+                        NativeToggleGroup.apply(storage.opaquePointer?.cast())
+                        gtk_box_set_homogeneous(storage.opaquePointer?.cast(), 1)
+                    }
+                }.halign(.center).padding(12).style("tm-settings-tabs")
             }.horizontalNavigation()
             ScrollView {
                 PreferencesView(runtime: runtime)

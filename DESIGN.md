@@ -79,7 +79,9 @@ components:
     padding: "5px 12px"
   settings-tab:
     rounded: "{rounded.settings-tab}"
-    padding: "10px 14px"
+    padding: "0"
+    width: "104px"
+    height: "76px"
   card:
     rounded: "{rounded.card}"
     padding: "{spacing.card-inset}"
@@ -176,7 +178,7 @@ The hierarchy uses relative sizes and native text measurement, so desktop font a
 
 Use a vertical content stack inside a native scroll view. The reusable dashboard page gutter is `page-inset`; section separation is `gap-16`. Dashboard stat cards use `gap-12` between equal-width columns, `gap-16` internal padding, and `gap-6` between label and value. Breakdown and chart cards use `card-inset`; their painted surface contains the padding rather than leaving an unpainted margin inside the card boundary.
 
-Settings uses `settings-inset` around a content column with an implemented maximum width of 800 logical pixels. Preferences groups have `preferences-gap` separation. Icon navigation keeps its natural height and scrolls horizontally if its measured content exceeds the available width. Native rows and controls retain their toolkit sizing.
+Settings uses `settings-inset` around a content column with an implemented maximum width of 800 logical pixels. Preferences groups have `preferences-gap` separation. Tab buttons share equal highlight rectangles with a minimum size of 104 × 76 logical pixels and `gap-8` between buttons; their contents stay vertically centered. The navigation scrolls horizontally if its measured content exceeds the available width. Native rows and controls retain their toolkit sizing.
 
 Collection-based layouts use native `FlowBox`: plan cards allow one to three columns, with a minimum card width of 270 logical pixels and `gap-12` between cards; chart legends allow one to eight items per row. These are measured native layouts, not CSS media-query breakpoints. The existing dashboard statistics and Analysis control row remain horizontal groups. The narrow capture demonstrates the current desktop layout at its captured width; it does not establish a phone layout or support at arbitrarily small widths.
 
