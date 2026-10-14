@@ -1,6 +1,7 @@
 #!/usr/bin/python3
 """Verify first-login setup never undoes opt-outs or records failed activation."""
 import importlib.util
+import json
 from pathlib import Path
 import tempfile
 import unittest
@@ -25,6 +26,32 @@ class Settings:
 
 
 class SetupTests(unittest.TestCase):
+    def test_user_installation_and_update(self):
+        with tempfile.TemporaryDirectory() as home:
+            source = Path(home) / 'bundle'
+            source.mkdir()
+            (source / 'metadata.json').write_text(json.dumps({'uuid': module.UUID}))
+            for name in ('extension.js', 'stylesheet.css', 'toastmonitor-token-symbolic.svg'):
+                (source / name).write_text('first version')
+            data = Path(home) / 'user-data'
+            target = module.install_extension(source, data)
+            self.assertEqual(target, data / 'gnome-shell/extensions' / module.UUID)
+            first_modified = (target / 'extension.js').stat().st_mtime_ns
+            module.install_extension(source, data)
+            self.assertEqual((target / 'extension.js').stat().st_mtime_ns, first_modified)
+            (source / 'extension.js').write_text('updated version')
+            module.install_extension(source, data)
+            self.assertEqual((target / 'extension.js').read_text(), 'updated version')
+
+    def test_invalid_bundle_is_not_installed(self):
+        with tempfile.TemporaryDirectory() as home:
+            source = Path(home) / 'bundle'
+            source.mkdir()
+            (source / 'metadata.json').write_text(json.dumps({'uuid': 'another-extension'}))
+            with self.assertRaises(RuntimeError):
+                module.install_extension(source, Path(home) / 'user-data')
+            self.assertFalse((Path(home) / 'user-data').exists())
+
     def test_opt_out_and_global_switch_are_respected(self):
         for settings in (Settings([module.UUID]), Settings(globally_disabled=True)):
             with self.subTest(settings=settings), tempfile.TemporaryDirectory() as home:

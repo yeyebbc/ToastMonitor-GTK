@@ -1,5 +1,7 @@
 #!/usr/bin/python3
 """Enable the bundled panel once, in the user's GNOME login session."""
+import argparse
+import json
 import os
 from pathlib import Path
 import sys
@@ -11,6 +13,27 @@ UUID = 'toastmonitor@yeyebbc.github.io'
 DESTINATION = 'org.gnome.Shell'
 OBJECT = '/org/gnome/Shell'
 INTERFACE = 'org.gnome.Shell.Extensions'
+
+
+def install_extension(source, data_home):
+    source = Path(source)
+    if json.loads((source / 'metadata.json').read_text()).get('uuid') != UUID:
+        raise RuntimeError('The bundled panel has invalid metadata.')
+    target = Path(data_home) / 'gnome-shell/extensions' / UUID
+    if target.is_symlink():
+        raise RuntimeError('The user panel directory is a symbolic link; leaving it unchanged.')
+    target.mkdir(parents=True, exist_ok=True)
+    # Install metadata last so a new directory is not discovered half-written.
+    for name in ('extension.js', 'stylesheet.css', 'toastmonitor-token-symbolic.svg', 'metadata.json'):
+        content = (source / name).read_bytes()
+        destination = target / name
+        if destination.is_file() and destination.read_bytes() == content:
+            continue
+        temporary = target / (name + '.new')
+        temporary.write_bytes(content)
+        temporary.chmod(0o644)
+        temporary.replace(destination)
+    return target
 
 
 def setup(state_home, settings, call, pause=time.sleep):
@@ -56,7 +79,33 @@ def setup(state_home, settings, call, pause=time.sleep):
 
 
 def main():
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument('--install-only', action='store_true', help='Install for this user before Shell starts')
+    parser.add_argument('--source', type=Path, help='Bundled extension source directory')
+    arguments = parser.parse_args()
+    source = arguments.source or Path(__file__).resolve().parents[2] / 'share/toastmonitor/gnome-extension'
     state_home = os.environ.get('XDG_STATE_HOME') or str(Path.home() / '.local/state')
+    data_home = os.environ.get('XDG_DATA_HOME') or str(Path.home() / '.local/share')
+    try:
+        install_extension(source, data_home)
+    except (OSError, ValueError, RuntimeError) as error:
+        print(f'ToastMonitor panel installation: {error}', file=sys.stderr)
+        return 1
+    if arguments.install_only:
+        # Initialization-phase autostart waits for registration. Register only
+        # after copying, so Shell cannot scan a missing or half-written panel.
+        startup_id = os.environ.get('DESKTOP_AUTOSTART_ID')
+        if startup_id:
+            try:
+                Gio.bus_get_sync(Gio.BusType.SESSION, None).call_sync(
+                    'org.gnome.SessionManager', '/org/gnome/SessionManager',
+                    'org.gnome.SessionManager', 'RegisterClient',
+                    GLib.Variant('(ss)', ('io.github.yeyebbc.ToastMonitor-panel-install', startup_id)),
+                    None, Gio.DBusCallFlags.NO_AUTO_START, 5000, None)
+            except GLib.Error as error:
+                print(f'ToastMonitor panel login registration: {error}', file=sys.stderr)
+                return 1
+        return 0
     if (Path(state_home) / 'toastmonitor/gnome-panel-setup-v1').exists():
         return 0
     try:

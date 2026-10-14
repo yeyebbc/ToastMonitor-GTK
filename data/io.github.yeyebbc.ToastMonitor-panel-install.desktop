@@ -1,0 +1,12 @@
+[Desktop Entry]
+Type=Application
+Name=ToastMonitor User Panel Installation
+Comment=Install the bundled panel for the current user before GNOME Shell starts
+Exec=/usr/libexec/toastmonitor/enable-gnome-panel --install-only
+TryExec=/usr/libexec/toastmonitor/enable-gnome-panel
+OnlyShowIn=GNOME;
+NoDisplay=true
+Terminal=false
+X-GNOME-Autostart-enabled=true
+X-GNOME-Autostart-Phase=Initialization
+X-GNOME-Autostart-Notify=true

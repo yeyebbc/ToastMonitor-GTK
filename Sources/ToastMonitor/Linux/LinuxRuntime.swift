@@ -46,12 +46,16 @@ final class LinuxRuntime {
     private var panelExpanded = false
     private var lastPanelPublish = Date.distantPast
     private var lastExplicitRefresh = Date.distantPast
+    private var panelSetupProcess: Process?
 
     func start(app: AdwaitaApp) {
         if DebugLog.enabled { NSLog("[ToastMonitor] runtime starting") }
         guard !started else { return }
         started = true
         self.app = app
+        if ProcessInfo.processInfo.environment["TM_TEST_MODE"] != "1" {
+            installUserPanel()
+        }
         startTime = Date()
         Database.shared.open()
         window = tm_main_window()
@@ -74,6 +78,21 @@ final class LinuxRuntime {
             HermesRemoteClient.shared.start()
         }
         refresh()
+    }
+
+    private func installUserPanel() {
+        let executable = URL(fileURLWithPath: CommandLine.arguments[0]).resolvingSymlinksInPath()
+        let helper = executable.deletingLastPathComponent().deletingLastPathComponent()
+            .appendingPathComponent("libexec/toastmonitor/enable-gnome-panel")
+        guard FileManager.default.isExecutableFile(atPath: helper.path) else { return }
+        let process = Process()
+        process.executableURL = helper
+        do {
+            try process.run()
+            panelSetupProcess = process
+        } catch {
+            NSLog("[ToastMonitor] Could not install the user panel: %@", error.localizedDescription)
+        }
     }
 
     func tick() {

@@ -6,7 +6,7 @@ project_dir="$PWD"
 for tool in dpkg-deb dpkg-shlibdeps dpkg-architecture python3; do
   command -v "$tool" >/dev/null || { echo "$tool is required to build a Debian package." >&2; exit 1; }
 done
-version="${TM_VERSION:-1.0.4}"
+version="${TM_VERSION:-1.0.5}"
 revision="${TM_DEB_REVISION:-1}"
 [[ "$version" =~ ^[0-9]+(\.[0-9]+){1,2}$ ]] || { echo "TM_VERSION must be numeric" >&2; exit 1; }
 [[ "$revision" =~ ^[0-9]+$ ]] || { echo "TM_DEB_REVISION must be numeric" >&2; exit 1; }
@@ -22,8 +22,8 @@ trap 'rm -rf "$work_dir"' EXIT
 package_dir="$work_dir/package"
 mkdir -p "$package_dir/DEBIAN"
 DESTDIR="$package_dir" PREFIX=/usr ./scripts/install-linux.sh
-install -Dm755 scripts/enable-gnome-panel.py "$package_dir/usr/libexec/toastmonitor/enable-gnome-panel"
 install -Dm644 data/io.github.yeyebbc.ToastMonitor-panel-setup.desktop "$package_dir/etc/xdg/autostart/io.github.yeyebbc.ToastMonitor-panel-setup.desktop"
+install -Dm644 data/io.github.yeyebbc.ToastMonitor-panel-install.desktop "$package_dir/etc/xdg/autostart/io.github.yeyebbc.ToastMonitor-panel-install.desktop"
 install -Dm644 LICENSE "$package_dir/usr/share/doc/toastmonitor/copyright"
 gzip -n -9 -c README.md > "$package_dir/usr/share/doc/toastmonitor/README.md.gz"
 # Keep the notices for the Swift runtimes and compiled package dependencies.

@@ -54,9 +54,13 @@ try:
         return bus.call_sync('org.gnome.Shell', '/org/gnome/Shell',
             'org.gnome.Shell.Extensions', method, GLib.Variant('(s)', (UUID,)),
             None, Gio.DBusCallFlags.NONE, 5000, None).unpack()[0]
-    assert extension_call('GetExtensionInfo')['state'] == 1
+    info = extension_call('GetExtensionInfo')
+    assert info['state'] == 1
+    assert info['type'] == 2, info
+    assert info['path'] == str(Path(os.environ['XDG_DATA_HOME']) / 'gnome-shell/extensions' / UUID), info
     assert extension_call('DisableExtension')
-    subprocess.run(['/usr/bin/python3', os.environ.get('TM_PANEL_SETUP_HELPER', 'scripts/enable-gnome-panel.py')], check=True)
+    subprocess.run(['/usr/bin/python3', os.environ.get('TM_PANEL_SETUP_HELPER', 'scripts/enable-gnome-panel.py'),
+                    '--source', os.environ.get('TM_PANEL_EXTENSION_SOURCE', 'gnome-extension/' + UUID)], check=True)
     assert extension_call('GetExtensionInfo')['state'] == 2
     assert extension_call('EnableExtension')
     for attempt in range(100):
@@ -66,6 +70,17 @@ try:
     assert extension_call('GetExtensionInfo')['state'] == 1
     evaluate('e._indicator.menu.open(); return true;')
     capture('stopped')
+    # A legacy app owns the right bus name but exposes no Panel object.
+    process = subprocess.Popen(['/usr/bin/python3', '-c',
+        "from gi.repository import Gio,GLib;bus=Gio.bus_get_sync(Gio.BusType.SESSION,None);"
+        "bus.call_sync('org.freedesktop.DBus','/org/freedesktop/DBus','org.freedesktop.DBus','RequestName',"
+        "GLib.Variant('(su)',('io.github.yeyebbc.ToastMonitor',0)),None,Gio.DBusCallFlags.NONE,5000,None);GLib.MainLoop().run()"])
+    wait_for("e._status.text.includes('Quit all copies')")
+    assert evaluate('return e._claimedOwner;') is None
+    capture('legacy-app')
+    process.terminate()
+    process.wait(timeout=10)
+    wait_for('!e._proxy.g_name_owner')
     process = subprocess.Popen([os.environ['TM_SMOKE_BINARY'], '--background'],
                                stdout=(root / 'app.log').open('w'), stderr=subprocess.STDOUT)
     wait_for('e._claimedOwner && e._raw && JSON.parse(e._raw).ready')

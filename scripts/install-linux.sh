@@ -21,11 +21,12 @@ PY
 install -Dm644 artifacts/ToastMonitor-Icon/ToastMonitor-1024.png "$stage$prefix/share/icons/hicolor/512x512/apps/io.github.yeyebbc.ToastMonitor.png"
 install -Dm644 data/icons/hicolor/scalable/status/toastmonitor-token-symbolic.svg "$stage$prefix/share/icons/hicolor/scalable/status/toastmonitor-token-symbolic.svg"
 extension_source=gnome-extension/toastmonitor@yeyebbc.github.io
-extension_target="$stage$prefix/share/gnome-shell/extensions/toastmonitor@yeyebbc.github.io"
+extension_target="$stage$prefix/share/toastmonitor/gnome-extension"
 mkdir -p "$extension_target"
 for source in "$extension_source"/*; do
   install -m644 "$source" "$extension_target/"
 done
+install -Dm755 scripts/enable-gnome-panel.py "$stage$prefix/libexec/toastmonitor/enable-gnome-panel"
 if [[ "${1:-}" == "--autostart" ]]; then
   config="${XDG_CONFIG_HOME:-$HOME/.config}"
   install -Dm644 data/io.github.yeyebbc.ToastMonitor-autostart.desktop "$stage$config/autostart/io.github.yeyebbc.ToastMonitor.desktop"

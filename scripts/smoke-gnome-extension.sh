@@ -18,7 +18,6 @@ uuid=toastmonitor@yeyebbc.github.io
 export TM_EXTENSION_CAPTURE_DIR="${TM_EXTENSION_CAPTURE_DIR:-$smoke_dir/captures}"
 mkdir -p "$smoke_dir/data/gnome-shell/extensions" "$smoke_dir/system/gnome-shell/modes" "$smoke_dir/config" "$smoke_dir/runtime" "$TM_EXTENSION_CAPTURE_DIR"
 chmod 700 "$smoke_dir/runtime"
-cp -a "gnome-extension/$uuid" "$smoke_dir/data/gnome-shell/extensions/"
 # This driver exists only inside the private test compositor and is never packaged.
 mkdir -p "$smoke_dir/data/gnome-shell/extensions/toastmonitor-test@local"
 cat > "$smoke_dir/data/gnome-shell/extensions/toastmonitor-test@local/metadata.json" <<'JSON'
@@ -39,6 +38,8 @@ export GSETTINGS_BACKEND=memory GTK_A11Y=none LIBGL_ALWAYS_SOFTWARE=1
 export TM_TEST_MODE=1 TM_DATABASE_PATH="$smoke_dir/usage.db" GSK_RENDERER=cairo
 export TM_SMOKE_BINARY="${TM_SMOKE_BINARY:-$PWD/.build/debug/ToastMonitor}"
 export TM_EXTENSION_TEST_ROOT="$smoke_dir"
+# Match login ordering: install a user extension before Shell scans, enable it after.
+/usr/bin/python3 "${TM_PANEL_SETUP_HELPER:-scripts/enable-gnome-panel.py}" --install-only --source "${TM_PANEL_EXTENSION_SOURCE:-gnome-extension/$uuid}"
 gnome-shell --headless --virtual-monitor 1280x900 --wayland --no-x11 --mode toastmonitor-test > "$smoke_dir/shell.log" 2>&1 &
 shell_pid=$!
 for attempt in {1..120}; do
@@ -47,7 +48,7 @@ for attempt in {1..120}; do
   sleep 0.25
 done
 grep -q true "$smoke_dir/ready"
-/usr/bin/python3 "${TM_PANEL_SETUP_HELPER:-scripts/enable-gnome-panel.py}"
+/usr/bin/python3 "${TM_PANEL_SETUP_HELPER:-scripts/enable-gnome-panel.py}" --source "${TM_PANEL_EXTENSION_SOURCE:-gnome-extension/$uuid}"
 export WAYLAND_DISPLAY=wayland-0 GDK_BACKEND=wayland
 /usr/bin/python3 scripts/test-gnome-extension.py
 if grep -E 'JS ERROR|Extension .*toastmonitor.*Error|Theme parsing error' "$smoke_dir/shell.log"; then exit 1; fi

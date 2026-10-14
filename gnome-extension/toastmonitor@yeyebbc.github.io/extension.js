@@ -164,6 +164,11 @@ export default class ToastMonitorExtension extends Extension {
     }
 
     _ownerChanged() {
+        if (this._snapshotRetry)
+            GLib.source_remove(this._snapshotRetry);
+        this._snapshotRetry = 0;
+        this._snapshotAttempts = 0;
+        this._snapshotFetching = false;
         this._raw = null;
         this._sourceKey = this._accountKey = null;
         this._claimedOwner = this._claimingOwner = null;
@@ -173,6 +178,38 @@ export default class ToastMonitorExtension extends Extension {
         }
         this._status.text = 'Connecting to ToastMonitor…';
         this._read();
+    }
+
+    _requestSnapshot() {
+        if (this._snapshotFetching || this._snapshotRetry || !this._proxy?.g_name_owner)
+            return;
+        const proxy = this._proxy;
+        const owner = proxy.g_name_owner;
+        this._snapshotFetching = true;
+        Gio.DBus.session.call(owner, PATH, 'org.freedesktop.DBus.Properties', 'Get',
+            new GLib.Variant('(ss)', [IFACE, 'Snapshot']), new GLib.VariantType('(v)'),
+            Gio.DBusCallFlags.NO_AUTO_START, 1500, this._cancellable, (connection, result) => {
+                if (!this._enabled || this._proxy !== proxy || proxy.g_name_owner !== owner)
+                    return;
+                this._snapshotFetching = false;
+                try {
+                    const [value] = connection.call_finish(result).unpack();
+                    proxy.set_cached_property('Snapshot', value);
+                    this._read();
+                } catch (error) {
+                    if (this._raw)
+                        return;
+                    if (++this._snapshotAttempts >= 5) {
+                        this._unavailable('The running ToastMonitor has no panel interface. Quit all copies and reopen the installed application.');
+                        return;
+                    }
+                    this._snapshotRetry = GLib.timeout_add(GLib.PRIORITY_DEFAULT, 1000, () => {
+                        this._snapshotRetry = 0;
+                        this._requestSnapshot();
+                        return GLib.SOURCE_REMOVE;
+                    });
+                }
+            });
     }
 
     _claim() {
@@ -215,7 +252,11 @@ export default class ToastMonitorExtension extends Extension {
         if (!this._proxy?.g_name_owner)
             return;
         const raw = this._proxy.get_cached_property('Snapshot')?.deep_unpack();
-        if (!raw || raw === this._raw)
+        if (!raw) {
+            this._requestSnapshot();
+            return;
+        }
+        if (raw === this._raw)
             return;
         try {
             const data = JSON.parse(raw);
@@ -285,7 +326,7 @@ export default class ToastMonitorExtension extends Extension {
         this._plansButton.hide();
         this._refresh.reactive = false;
         this._refresh.can_focus = false;
-        this._openButton.child.text = 'Start ToastMonitor';
+        this._openButton.child.text = this._proxy?.g_name_owner ? 'Open ToastMonitor' : 'Start ToastMonitor';
     }
 
     _showNotice(message) {
@@ -345,6 +386,10 @@ export default class ToastMonitorExtension extends Extension {
                 null, Gio.DBusCallFlags.NO_AUTO_START, 2000, null, null);
         }
         this._cancellable?.cancel();
+        if (this._snapshotRetry)
+            GLib.source_remove(this._snapshotRetry);
+        this._snapshotRetry = 0;
+        this._snapshotFetching = false;
         if (this._refreshTimeout)
             GLib.source_remove(this._refreshTimeout);
         this._refreshTimeout = 0;
